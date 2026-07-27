@@ -13,6 +13,7 @@ public class MoldCastingBasic : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "AIModule",
+                "EnhancedInput",
                 "NavigationSystem",
                 "Mover",
                 "MotionWarping"

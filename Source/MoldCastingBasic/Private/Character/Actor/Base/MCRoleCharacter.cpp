@@ -2,12 +2,15 @@
 
 #include "Character/Actor/Base/MCRoleCharacter.h"
 
+#include "Character/Actor/Component/Role/MCRoleInputComponent.h"
 #include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
 
 AMCRoleCharacter::AMCRoleCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMCRoleMoverComponent>(MoverComponentName))
 {
 	PrimaryActorTick.bCanEverTick = true;
+
+	OverrideInputComponentClass = UMCRoleInputComponent::StaticClass();
 }
 
 void AMCRoleCharacter::BeginPlay()
