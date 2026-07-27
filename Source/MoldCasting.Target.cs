@@ -16,6 +16,6 @@ public class MoldCastingTarget : TargetRules
 
 	private void RegisterModulesCreatedByRider()
 	{
-		ExtraModuleNames.AddRange(new string[] {"MoldCastingBasic", "MoldCastingEditor"});
+		ExtraModuleNames.AddRange(new string[] {"MoldCastingBasic"});
 	}
 }

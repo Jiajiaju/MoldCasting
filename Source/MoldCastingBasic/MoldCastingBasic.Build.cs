@@ -10,14 +10,16 @@ public class MoldCastingBasic : ModuleRules
             new string[]
             {
                 "Core",
+                "CoreUObject",
+                "Engine",
+                "AIModule",
+                "NavigationSystem"
             }
         );
 
         PrivateDependencyModuleNames.AddRange(
             new string[]
             {
-                "CoreUObject",
-                "Engine",
                 "Slate",
                 "SlateCore"
             }
