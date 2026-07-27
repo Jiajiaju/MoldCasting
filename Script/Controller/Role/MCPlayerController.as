@@ -1,4 +1,0 @@
-UCLASS()
-class AMCPlayerController : AMCBasePlayerController
-{
-}
