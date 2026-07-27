@@ -1,0 +1,4 @@
+UCLASS()
+class UMCASRoleAnimInstance : UMCBaseAnimInstance
+{
+}
