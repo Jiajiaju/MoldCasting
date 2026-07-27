@@ -1,30 +1,25 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
-
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Character/Actor/Base/MCRoleCharacter.h"
 
+#include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
 
-// Sets default values
-AMCRoleCharacter::AMCRoleCharacter()
+AMCRoleCharacter::AMCRoleCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMCRoleMoverComponent>(MoverComponentName))
 {
-	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 }
 
-// Called when the game starts or when spawned
 void AMCRoleCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
 }
 
-// Called every frame
 void AMCRoleCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 }
 
-// Called to bind functionality to input
 void AMCRoleCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);

@@ -6,23 +6,42 @@
 #include "GameFramework/Pawn.h"
 #include "MCBaseCharacter.generated.h"
 
+class UCapsuleComponent;
+class UMCBaseMoverComponent;
+class UMotionWarpingComponent;
+class UNavMoverComponent;
+class USkeletalMeshComponent;
+
 UCLASS()
 class MOLDCASTINGBASIC_API AMCBaseCharacter : public APawn
 {
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this pawn's properties
-	AMCBaseCharacter();
+	AMCBaseCharacter(const FObjectInitializer& ObjectInitializer);
 
 protected:
-	// Called when the game starts or when spawned
+	static const FName MoverComponentName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
+	TObjectPtr<UCapsuleComponent> CapsuleComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
+	TObjectPtr<USkeletalMeshComponent> SkeletalMeshComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
+	TObjectPtr<UMCBaseMoverComponent> MoverComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
+	TObjectPtr<UNavMoverComponent> NavMoverComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
+	TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
+
 	virtual void BeginPlay() override;
 
 public:
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	// Called to bind functionality to input
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 };

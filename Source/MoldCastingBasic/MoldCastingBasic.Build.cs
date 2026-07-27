@@ -13,7 +13,9 @@ public class MoldCastingBasic : ModuleRules
                 "CoreUObject",
                 "Engine",
                 "AIModule",
-                "NavigationSystem"
+                "NavigationSystem",
+                "Mover",
+                "MotionWarping"
             }
         );
 
