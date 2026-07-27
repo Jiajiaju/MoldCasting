@@ -3,6 +3,7 @@
 #include "Character/Actor/Base/MCRoleCharacter.h"
 
 #include "Character/Actor/Component/Role/MCRoleInputComponent.h"
+#include "Character/Actor/Component/Role/MCRoleInputConfig.h"
 #include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
 
 AMCRoleCharacter::AMCRoleCharacter(const FObjectInitializer& ObjectInitializer)
@@ -26,4 +27,26 @@ void AMCRoleCharacter::Tick(float DeltaTime)
 void AMCRoleCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	UMCRoleInputComponent* RoleInputComponent = Cast<UMCRoleInputComponent>(PlayerInputComponent);
+	UMCRoleMoverComponent* RoleMoverComponent = GetRoleMoverComponent();
+
+	if (!ensure(IsValid(RoleInputComponent))
+		|| !ensure(IsValid(RoleMoverComponent))
+		|| !ensure(IsValid(RoleInputConfig.Get())))
+	{
+		return;
+	}
+
+	RoleInputComponent->InitializeRoleInput(this, RoleMoverComponent, RoleInputConfig.Get());
+}
+
+UMCRoleInputComponent* AMCRoleCharacter::GetRoleInputComponent() const
+{
+	return Cast<UMCRoleInputComponent>(InputComponent);
+}
+
+UMCRoleMoverComponent* AMCRoleCharacter::GetRoleMoverComponent() const
+{
+	return Cast<UMCRoleMoverComponent>(MoverComponent);
 }

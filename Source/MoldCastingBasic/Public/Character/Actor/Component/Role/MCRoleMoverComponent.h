@@ -12,4 +12,8 @@ class MOLDCASTINGBASIC_API UMCRoleMoverComponent : public UMCBaseMoverComponent
 
 public:
 	UMCRoleMoverComponent();
+
+	void SetRoleInputProducer(UObject* NewInputProducer);
+
+	void ClearRoleInputProducer(const UObject* InputProducerToClear);
 };
