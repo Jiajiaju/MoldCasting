@@ -6,7 +6,14 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/NavMoverComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "MotionWarpingComponent.h"
+
+namespace MCBaseCharacter
+{
+	constexpr float CapsuleRadius = 30.0f;
+	constexpr float CapsuleHalfHeight = 86.0f;
+}
 
 const FName AMCBaseCharacter::MoverComponentName(TEXT("MoverComponent"));
 
@@ -19,6 +26,11 @@ AMCBaseCharacter::AMCBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	SetReplicatingMovement(false);
 
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleComponent"));
+	CapsuleComponent->InitCapsuleSize(
+		MCBaseCharacter::CapsuleRadius,
+		MCBaseCharacter::CapsuleHalfHeight);
+	CapsuleComponent->SetCollisionProfileName(UCollisionProfile::Pawn_ProfileName);
+	CapsuleComponent->CanCharacterStepUpOn = ECB_No;
 	SetRootComponent(CapsuleComponent);
 
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("SkeletalMeshComponent"));
