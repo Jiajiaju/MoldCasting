@@ -2,6 +2,10 @@
 
 基于 Unreal Engine 5.8 的 C++ 项目。
 
+## 项目核心目标
+
+项目以动作手感、严格的一镜到底、动作表演精细度和完整环境交互为核心目标。详细说明见 [`Docs/PROJECT_SUMMARY.md`](Docs/PROJECT_SUMMARY.md)。
+
 ## 当前状态
 
 项目目前处于基础工程与技术验证阶段：

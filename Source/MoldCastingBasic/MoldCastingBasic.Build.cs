@@ -14,6 +14,7 @@ public class MoldCastingBasic : ModuleRules
                 "Engine",
                 "AIModule",
                 "EnhancedInput",
+                "GameplayTags",
                 "NavigationSystem",
                 "Mover",
                 "MotionWarping"
