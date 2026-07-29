@@ -359,6 +359,7 @@ flowchart TD
     UIAction["当前活动 UI Action"]
     CommonMode{"CommonUI 是否允许继续传递"}
     EnhancedInput["Enhanced Input"]
+    InputComponent["Gameplay InputComponent<br/>绑定 InputAction / 转换 InputTag"]
     GameplayRouter["Gameplay Input Router<br/>InputAction → InputTag"]
     PolicyGate{"InputTag Policy 是否允许"}
     Gameplay["Controller / Character / Combat / Item / Narrative"]
@@ -374,7 +375,8 @@ flowchart TD
     UIAction -->|"未消费"| CommonMode
     CommonMode -->|"Menu：全部截断"| Stop
     CommonMode -->|"Game / All：继续传递"| EnhancedInput
-    EnhancedInput --> GameplayRouter
+    EnhancedInput --> InputComponent
+    InputComponent --> GameplayRouter
     GameplayRouter --> PolicyGate
     PolicyGate -->|"被策略阻止"| Stop
     PolicyGate -->|"允许"| Gameplay
@@ -390,6 +392,50 @@ flowchart TD
 2. **Gameplay 语义输入阻止**：Gameplay Input Router 根据 InputTag 判断某项玩法意图是否允许执行。
 
 例如，背包界面可以消费用于 UI 导航的十字键，允许未消费的鼠标移动继续控制镜头，同时通过 InputTag 策略阻止攻击和环境交互。
+
+#### CommonUI 物理输入消费
+
+`InputComponent` 绑定某个 Gameplay Input Action，只表示输入流到达 Enhanced Input 后由该组件接收，不代表它会先于 UI 获得物理输入。项目使用 `UMCGameViewportClient` 继承 `UCommonGameViewportClient` 后，物理输入首先由 Viewport 转交给本地玩家的 `UCommonUIActionRouterBase`：
+
+```text
+UCommonGameViewportClient::InputKey
+→ UCommonUIActionRouterBase::ProcessInput
+→ 当前活动 UI Action Binding
+→ Handled / BlockGameInput / Unhandled
+```
+
+CommonUI 提供以下核心 API：
+
+- `UCommonUserWidget::RegisterUIActionBinding`：注册 Widget 所拥有的 UI Action。
+- `FBindUIActionArgs::bConsumeInput`：决定匹配的 UI Action 是否消费本次物理输入，默认值为 `true`。
+- `UCommonUIActionRouterBase::ProcessInput`：按当前 LocalPlayer、活动 Widget 树、输入模式、按键和输入事件执行路由。
+- `ERouteUIInputResult`：返回 `Handled`、`BlockGameInput` 或 `Unhandled`。
+
+当 UI Action 匹配并且 `bConsumeInput == true` 时，Action Router 返回 `Handled`。`UCommonGameViewportClient` 将结果转换为 `FReply::Handled()`，并从 `InputKey` 返回 `true`，不再调用 `Super::InputKey`。因此该物理事件不会进入 PlayerController、Enhanced Input 或 Gameplay InputComponent。
+
+```text
+SpaceBar
+→ 匹配 UI.Action.Confirm
+→ 执行 Confirm
+→ bConsumeInput == true
+→ Viewport 截断本次 SpaceBar 事件
+→ IA_Jump 不触发
+```
+
+UI 不根据 `SpaceBar` 倒查 Gameplay Mapping，也不把 `UI.Action.Confirm` 转换为 `Input.Gameplay.Jump`。两者只是可能共享同一个物理按键，不存在语义映射关系。消费本次物理事件会自然阻止该事件产生的所有下游 Gameplay Action；Gameplay InputTag 策略则独立负责禁止某一类玩法意图。
+
+#### 条件性消费
+
+UI 可以根据当前界面状态决定同一个输入是否被消费：
+
+- Widget 不在活动 CommonUI 输入树中时，其非 Persistent Action Binding 不响应也不消费输入。
+- Widget 激活且对应 Binding 的 `bConsumeInput == true` 时，匹配输入由 UI 消费。
+- `ECommonInputMode::All` 下，未被 UI 消费的输入继续进入 Gameplay。
+- `ECommonInputMode::Menu` 下，即使没有 UI Action 处理输入，CommonUI 也会阻止正常 Gameplay 输入；需要按项放行时不得使用该模式。
+
+对于同一个活动 Widget 内部的动态条件，UE 5.8 的 `FUIActionBindingHandle` 没有公开的 `SetConsumeInput`。应当在条件变化时通过 `RegisterUIActionBinding` 和 `FUIActionBindingHandle::Unregister` 注册或注销消费型 Binding，或者将不同输入状态拆分为不同的 `UCommonActivatableWidget`。不得在 Tick 中反复注册，也不得直接修改 CommonUI 内部的 `FUIActionBinding::bConsumesInput`。
+
+`FSimpleDelegate` 类型的 UI Action 回调没有“本次是否消费”的返回值，因此消费决定必须在事件到达前由活动 Widget 和 Binding 状态确定。只有确实无法提前确定的特殊输入规则，才考虑自定义 Action Router 或 Viewport 路由。
 
 ### 9.4 C++ 基础层
 
@@ -411,6 +457,33 @@ Input Action
 ```
 
 `UMCInputPolicySubsystem` 只理解 InputTag 和策略定义，不引用具体 Widget、Character、Combat 或 Item 类型。
+
+#### Gameplay InputComponent
+
+角色使用的 Gameplay InputComponent 是 Pawn 层的输入适配器，不是全局输入管理器，也不负责判断当前 UI 状态。其职责为：
+
+- 绑定角色所需的 Enhanced Input Action。
+- 将 `InputAction + TriggerEvent + Value` 转换为项目统一的 Gameplay InputTag 语义。
+- 将输入提交给 `UMCGameplayInputRouter`，在策略允许后更新角色输入状态或分发玩法意图。
+- 缓存移动、跳跃、蹲伏等 Mover 所需输入，并通过 `IMoverInputProducerInterface` 提供预测输入。
+- 在失去控制权、策略截断或输入上下文切换时清理持续输入状态。
+
+Gameplay InputComponent 不得：
+
+- 查询活动 Widget、保存 Widget 引用或自行判断 UI 是否打开。
+- 定义当前 Input Policy。
+- 绕过 Gameplay Input Router 直接执行最终移动、战斗、交互或剧情行为。
+- 复制原始设备输入；网络层只处理经过仲裁的移动输入或玩法请求。
+
+角色不在 `BeginPlay` 中监听玩家设备输入。角色获得本地玩家控制权并由 Unreal 调用 `SetupPlayerInputComponent` 后，才初始化 Gameplay InputComponent、绑定 Input Action 并连接 Mover Input Producer。初始化必须保证幂等，重新控制角色时先清理旧绑定。
+
+只有同时满足以下条件的角色才监听玩家输入：
+
+- 角色由 `APlayerController` 控制。
+- 角色属于本地玩家。
+- `IsLocallyControlled()` 为 `true`。
+
+远端模拟角色、AI 角色以及服务端上的非本地角色不绑定本地设备输入。角色在 `UnPossessed`、InputComponent `OnUnregister`、Controller 更换或 `EndPlay` 时停止监听，移除角色 Mapping Context、清除 Action Binding、重置输入状态并解除 Mover Input Producer。
 
 ### 9.5 AngelScript/Blueprint 扩展层
 
@@ -437,6 +510,19 @@ Widget 使用 GameplayTag 声明输入策略，策略标签通过数据配置解
 | `Input.Policy.UIOnly.PauseMenu` | `Menu` | 阻止全部 Gameplay Input |
 
 Widget 只声明 PolicyTag，不直接设置或移除 Gameplay Mapping Context，也不调用 Gameplay Input Component。
+
+#### UI Action Tag
+
+CommonUI 使用 `FUIActionTag` 标识逻辑 UI Action。`FUIActionTag` 是 `FGameplayTag` 的强类型派生，统一使用 CommonUI 要求的 `UI.Action.*` 根标签：
+
+```text
+UI.Action.Confirm
+UI.Action.Back
+UI.Action.NextTab
+UI.Action.PreviousTab
+```
+
+UI Action Tag 负责描述界面操作，由 CommonUI 根据当前输入设备和按键配置解析为实际 `FKey`。UI 代码不得硬编码空格、回车、手柄面键等物理按键，也不得根据物理按键倒查 Gameplay InputTag。
 
 #### Gameplay Input Tag
 
@@ -476,17 +562,23 @@ Mapping Context 优先级使用统一的具名常量，不允许各 Widget 自�
 - 多个 UI 同时激活时，被阻止的 Gameplay InputTag 取活动策略的并集；CommonUI 模式、鼠标捕获和焦点配置由最高优先级的活动策略决定。
 - Widget 停用、LocalPlayer 退出或世界切换时必须释放对应策略句柄。
 - 进入全 UI 模式时清理已按下按键；恢复 Gameplay 时避免菜单关闭按键继续触发攻击、跳跃等玩法行为。
+- 当策略新增对持续型 InputTag 的阻止时，Gameplay Input Router 必须主动取消对应输入并通知 InputComponent 将状态归零，不能等待可能已被 UI 消费的 Released 事件。
+- UI 关闭并恢复 Gameplay 时，当前仍处于按下状态的按键必须等待释放后才能重新触发，避免关闭菜单的 Confirm 或 Back 同时触发 Jump、Attack 等玩法行为。
 
 ### 9.8 测试与验收
 
 - 验证 CommonUI Action 回调始终先于 Enhanced Input Gameplay 回调。
 - 验证 UI Action 消费输入后，同一物理输入不会触发 Gameplay。
+- 验证 UI 消费物理输入时不查询 Gameplay Mapping，也不需要解析对应 Gameplay InputTag。
 - 验证 `All` 模式下，UI 未消费且策略允许的输入可以正常流入 Gameplay。
+- 验证同一 Widget 状态变化时，消费型 Binding 的注册和注销能够分别截断和放行同一个输入。
+- 验证非活动 Widget 的非 Persistent Action Binding 不会响应或消费输入。
 - 验证混合界面能够允许 Look，同时独立阻止 Move、Attack 或 Interact。
 - 验证父 InputTag 可以批量阻止其所有子输入，单项 InputTag 不影响同级输入。
 - 验证 `Menu` 模式下，即使没有 Widget 处理某个按键，该输入也不会进入 Gameplay。
 - 验证多个 UI 策略叠加及乱序关闭时，输入状态能够正确恢复。
 - 验证 UI 打开、关闭和焦点切换时不会产生残留按键、幽灵攻击或持续移动。
+- 验证角色仅在本地玩家控制且完成 `SetupPlayerInputComponent` 后监听输入，并在失去控制权时彻底清理。
 - 验证键鼠、手柄及不同 LocalPlayer 的输入策略彼此独立。
 
 ### 9.9 当前决策
@@ -494,6 +586,9 @@ Mapping Context 优先级使用统一的具名常量，不允许各 Widget 自�
 - 使用 `UMCGameViewportClient` 继承 `UCommonGameViewportClient`，由 CommonUI 提供 UI 优先的物理输入路由。
 - UI 通过 GameplayTag 声明输入策略，不直接依赖 Gameplay 实现。
 - CommonUI Action Router 负责物理输入消费，Gameplay Input Router 负责语义 InputTag 策略检查。
+- UI Action 使用 `UI.Action.*`，Gameplay Input 使用 `Input.Gameplay.*`；两者不互相转换，也不通过物理按键倒查。
+- 条件性拦截由活动 Widget 和消费型 Action Binding 的生命周期控制；需要逐项放行的混合界面使用 `All` 模式。
+- Gameplay InputComponent 在本地玩家的 `SetupPlayerInputComponent` 阶段开始监听，并作为 Enhanced Input 到 Gameplay Input Router 之间的角色输入适配器。
 - Gameplay、UI 和 System Mapping Context 分别使用 `0`、`1000` 和 `2000` 的固定优先级。
 - 所有 Gameplay Input 必须先通过统一路由，不允许 Input Action 直接执行最终玩法行为。
 
