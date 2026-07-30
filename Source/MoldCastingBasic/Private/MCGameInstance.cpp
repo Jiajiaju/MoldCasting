@@ -11,8 +11,11 @@ void UMCGameInstance::OnStart()
 {
 	Super::OnStart();
 
-	if (IsValid(CharacterService)) CharacterService->OnStart();
-	if (IsValid(UIService)) UIService->OnStart();
+	if (IsValid(LogService))			LogService->OnStart();
+	if (IsValid(DebugService))		DebugService->OnStart();
+	if (IsValid(DataTableService))	DataTableService->OnStart();
+	if (IsValid(CharacterService))	CharacterService->OnStart();
+	if (IsValid(UIService))			UIService->OnStart();
 }
 
 UMCGameInstance* UMCGameInstance::GetInstance()
@@ -44,9 +47,15 @@ void UMCGameInstance::Init()
 {
 	Super::Init();
 
-	CharacterService = GetSubsystem<UMCCharacterService>();
-	UIService = GetSubsystem<UMCUIService>();
+	LogService			= GetSubsystem<UMCLogService>();
+	DebugService		= GetSubsystem<UMCDebugService>();
+	DataTableService	= GetSubsystem<UMCDataTableService>();
+	CharacterService	= GetSubsystem<UMCCharacterService>();
+	UIService			= GetSubsystem<UMCUIService>();
 
-	if (IsValid(CharacterService)) CharacterService->Init();
-	if (IsValid(UIService)) UIService->Init();
+	if (IsValid(LogService))			LogService->Init();
+	if (IsValid(DebugService))		DebugService->Init();
+	if (IsValid(DataTableService))	DataTableService->Init();
+	if (IsValid(CharacterService))	CharacterService->Init();
+	if (IsValid(UIService))			UIService->Init();
 }

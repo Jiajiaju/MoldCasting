@@ -243,11 +243,27 @@ MoldCasting 的核心游戏框架按以下九个领域进行组织，其中 Char
 
 ### 6.6 网络与生命周期
 
-待填写。
+- 所有放入 World Partition、Runtime Data Layer 或 Streaming Level 的 Actor
+  一律按“可反复入世”设计，不根据当前空间加载设置编写两套生命周期逻辑。
+- Actor 向 GameInstance 级 Service 的注册与反注册必须分别归属
+  `BeginPlay` 和 `EndPlay`；不得依赖 `Destroyed()` 完成注销。
+- World Partition Cell 流出后，同一 Actor 实例可能存活并在重新激活时再次执行
+  `PostInitializeComponents` 和 `BeginPlay`，因此初始化、注册和绑定必须幂等。
+- `EndPlay(RemovedFromWorld)` 是有状态世界对象快照运行状态的权威时机；重新
+  `BeginPlay` 时从 World 状态或存档数据恢复。
+- Actor 流出后仍需继续执行的逻辑不得留在 Actor 本体，必须选择常驻、逻辑
+  上移或惰性结算方案。
+- 完整契约见“Actor 生命周期与 World Partition”章节。
 
 ### 6.7 测试与验收
 
-待填写。
+- 在 PIE 中驱动 Streaming Source 离开并返回目标区域，确认 Actor 能够反复
+  执行流出和流入流程。
+- 将 Runtime Data Layer 在 `Activated` 和 `Loaded` 之间切换，确认 Service
+  注册数量在重入后恢复且没有重复项。
+- 分别覆盖 `RemovedFromWorld`、`Destroyed`、`LevelTransition` 和
+  `EndPlayInEditor` 路径。
+- 检查流出 Actor 不再持有 Timer、外部委托、异步请求或世界层资源占用。
 
 ### 6.8 待确认事项
 
@@ -678,3 +694,399 @@ C++ 接口实现易变的业务逻辑。
 - 页面 Layer、页面栈和模态规则。
 - 页面标识及 UI Tag 体系。
 - 具体页面与此前 Input Policy 的自动接入方式。
+
+## 11. 基础服务框架
+
+### 11.1 目标
+
+基础服务框架用于承载不属于具体 Gameplay Level、且需要贯穿整个游戏进程的
+跨系统能力。所有服务继承 `UMCBaseService`，以 `UGameInstanceSubsystem`
+作为生命周期基础，由 `UMCGameInstance` 统一持有并调用项目级初始化入口。
+
+当前服务启动顺序为：
+
+```text
+UMCGameInstance
+→ UMCLogService
+→ UMCDebugService
+→ UMCDataTableService
+→ UMCCharacterService
+→ UMCUIService
+```
+
+`UMCLogService` 最先启动，保证后续服务在初始化和启动阶段都可以使用统一日志。
+
+### 11.2 LogService 职责
+
+`UMCLogService` 负责提供统一的项目日志入口，隔离业务代码与零散的日志分类、
+输出级别和 AngelScript 绑定实现。LogService 只负责诊断信息输出，不承载业务
+状态、流程控制或错误恢复逻辑。
+
+当前日志分类如下：
+
+| 分类 | 用途 |
+| --- | --- |
+| `MCCommon` | 跨系统通用信息 |
+| `MCUI` | UI 框架和页面业务 |
+| `MCInScreen` | 屏幕调试信息及其日志副本 |
+| `MCCombat` | 战斗系统 |
+| `MCItem` | 环境物品与环境交互 |
+| `MCWorld` | 世界地图、加载和世界状态 |
+| `MCCharacter` | 角色、移动和动画相关逻辑 |
+
+每个分类均提供 `Info`、`Warn` 和 `Error` 三种输出级别：
+
+- `Info` 对应 Unreal `Display`。
+- `Warn` 对应 Unreal `Warning`。
+- `Error` 对应 Unreal `Error`。
+
+### 11.3 C++ 接口
+
+C++ 通过 `DECLARE_NATIVE_LOG_METHOD` 为每个分类生成带编译期格式检查的日志
+方法，命名形式为：
+
+```text
+NativeLog<Category>Info
+NativeLog<Category>Warn
+NativeLog<Category>Error
+```
+
+调用示例：
+
+```cpp
+if (IsValid(LogService))
+{
+	LogService->NativeLogMCCharacterInfo(
+		TEXT("Character [%s] initialized."),
+		*GetNameSafe(Character)
+	);
+}
+```
+
+格式化完成后统一通过 `UE_LOG` 输出，业务代码不需要自行选择 Unreal 日志分类。
+
+### 11.4 AngelScript 接口
+
+`MoldCastingBasic` 模块依赖 `AngelscriptCode`，并通过
+`FAngelscriptBinds::ExistingClass("UMCLogService")` 为现有 C++ Service 注册
+AngelScript 方法。绑定对象使用项目命名 `Bind_MCLog`。
+
+AngelScript 接口命名形式为：
+
+```text
+Log<Category>Info
+Log<Category>Warn
+Log<Category>Error
+```
+
+调用流程为：
+
+```text
+UMCGameInstance::GetInstance()
+→ LogService
+→ Log<Category><Level>(Message)
+→ 对应 Unreal Log Category
+```
+
+AngelScript 只提交最终字符串，不直接依赖 `UE_LOG` 宏或 C++ 可变参数格式化。
+
+### 11.5 屏幕调试输出
+
+`PrintInScreen` 用于需要同时保留日志记录和屏幕提示的开发期诊断信息：
+
+```text
+PrintInScreen
+├─ 写入 MCInScreen / Display
+└─ GEngine::AddOnScreenDebugMessage
+```
+
+当前提供纯文本和 `float` 数值两种重载。屏幕信息默认显示 5 秒；未传入颜色时
+使用随机颜色。即使当前没有有效 `GEngine`、无法显示屏幕信息，日志副本仍会
+正常写入 `MCInScreen`。
+
+### 11.6 生命周期与边界
+
+- LogService 随 GameInstance 创建和销毁，不依赖 World、Level、GameMode 或
+  PlayerController。
+- `UMCGameInstance` 缓存 LogService，并在其他项目服务之前调用其 `Init()` 和
+  `OnStart()`。
+- C++ 和 AngelScript 共用相同日志分类，避免形成两套日志命名。
+- 业务系统负责选择正确分类和日志级别，LogService 不判断业务成功或失败。
+- 屏幕输出只用于开发诊断；需要持久保存或面向玩家显示的信息不得依赖
+  `PrintInScreen`。
+- GameInstance 级 Service 的 Actor 注册接口必须支持幂等注册、容忍重复反注册，
+  并允许查询方在目标 Actor 尚未入世或已经流出时获得空结果。
+- Service 不得假定已注册 Actor 的寿命与自身相同；Actor 必须在 `EndPlay`
+  反注册，Service 也应在开发环境提供无效对象自检。
+
+### 11.7 验证要求
+
+- 使用 Unreal Engine 5.8 `MoldCastingEditor Win64 Development` 验证 C++、
+  反射代码和 AngelScript 绑定能够完成编译与链接。
+- 分别从 C++ 和 AngelScript 调用各日志级别，确认分类与级别正确。
+- 验证 `PrintInScreen` 在可用 Viewport 中同时产生屏幕信息和日志副本。
+- 验证无有效 `GEngine` 时不会访问无效对象，且日志输出仍然有效。
+
+## 12. Actor 生命周期与 World Partition
+
+> 状态：已拍板（2026-07-27）；2026-07-29 修订
+> `PostInitializeComponents` 重入规则。
+>
+> 适用范围：所有放入关卡或运行时 Spawn 的游戏 Actor，包括角色、环境物品、
+> 机关、Trigger、Maker 和其他世界对象。
+
+### 12.1 目标
+
+Actor 向 GameInstance 级 Service 的注册和反注册，在 World Partition 流送、
+Runtime Data Layer 切换、切关及显式销毁路径下都必须满足：
+
+- 不泄漏注册项。
+- 不留下悬空引用。
+- 同一实例可以反复流出和流入。
+- 每类初始化和反初始化操作都有唯一明确的生命周期归属。
+
+GameInstance 级 Service 的寿命跨 World。Actor 的注销如果只放在
+`Destroyed()`，World Partition 流出和切关后就可能在 Service 中留下已经离开
+世界的对象，因此本项目以 `EndPlay` 作为 Actor 运行期清理的统一出口。
+
+### 12.2 UE 5.8 引擎事实
+
+#### 12.2.1 Actor 消亡路径
+
+| 路径 | `EndPlay` | `Destroyed()` |
+| --- | --- | --- |
+| 显式 `Destroy()` | `Destroyed` | 执行 |
+| WP Cell 流出、Streaming Level 隐藏、Data Layer 停用 | `RemovedFromWorld` | 不执行 |
+| 切关、PIE 结束、退出 | `LevelTransition`、`EndPlayInEditor` 或 `Quit` | 不执行 |
+
+结论：所有运行期注销和清理只能依赖 `EndPlay`。`Destroyed()` 不承担注销职责。
+
+源码依据：
+
+- 显式销毁入口：`UWorld::DestroyActor`，`LevelActor.cpp`。
+- 流送移除：`ULevel::RouteActorEndPlayForRemoveFromWorld`，`Level.cpp`。
+- 世界结束：`UWorld::CleanupWorld` 相关流程，`World.cpp`。
+
+#### 12.2.2 同一实例会反复入世
+
+World Partition Runtime Cell 包含 `Unloaded`、`Loaded`、`Activated` 三种状态：
+
+- `Activated → Loaded`：Level 从 World 移除，Actor 执行
+  `EndPlay(RemovedFromWorld)`，但实例可以继续存活。
+- 流送移除会重置 Actor 初始化状态。
+- Cell 重新进入 `Activated` 后，同一实例可以重新执行
+  `InitializeComponents`、`PostInitializeComponents` 和 `BeginPlay`。
+- `Loaded → Unloaded` 后由 GC 清理；下次流入可能从包重新创建新实例。
+
+因此必须遵守：
+
+1. 成员变量在 `EndPlay` 到下一次 `BeginPlay` 之间不会自动恢复为构造默认值。
+2. `PostInitializeComponents` 与 `BeginPlay` 都是“每次入世一次”，不是
+   “同一实例一生一次”。
+3. 引擎没有“同一实例只执行一次”的 Actor 入世钩子；真正的一次性操作必须
+   使用对象自身持有的标志守门，或设计为天然幂等。
+4. Runtime Data Layer 停用同样可以产生 `RemovedFromWorld`，因此
+   `bIsSpatiallyLoaded == false` 不代表 Actor 永远不会流出。
+
+相关源码流程包括：
+
+- `AActor::RouteEndPlay`，`Actor.cpp`。
+- `ULevel::RouteActorInitialize`，`Level.cpp`。
+- `ResetLevelFlagsOnLevelAddedToWorld`，`World.cpp`。
+
+#### 12.2.3 EndPlay 不会自动清理 Timer
+
+`AActor::EndPlay` 不会替 Actor 调用 `ClearAllTimersForObject`。Actor 因
+`RemovedFromWorld` 流出后实例仍可能存活，未清理的 Timer 仍会触发并回调一个
+已经离开世界的 Actor。
+
+结论：Actor 设置的 Timer 必须在自身 `EndPlay` 中显式清理。
+
+#### 12.2.4 OnConstruction 不是运行时初始化钩子
+
+- 编辑器中，属性修改、拖动和 Undo/Redo 都可能触发
+  `RerunConstructionScripts`。
+- 打包游戏加载关卡摆放 Actor 时，不重新执行其 Construction Script，而是
+  直接使用保存关卡时烘焙的结果。
+- 运行时 `SpawnActor` 创建的 Actor 会在 Spawn 流程中执行 Construction。
+
+结论：`OnConstruction` 只负责根据作者属性生成可烘焙、确定性的程序化外观；
+运行时注册、监听、Timer、状态恢复和业务逻辑禁止放入 `OnConstruction`。
+
+### 12.3 生命周期职责表
+
+| 钩子 | 引擎特性 | 项目职责 |
+| --- | --- | --- |
+| 构造函数 | CDO 和实例都会执行；不可依赖 World | 创建默认组件、设置成员默认值、Tick 开关、加载类别和碰撞 Profile 类默认 |
+| `OnConstruction` | 编辑器可反复执行；打包游戏中的关卡摆放 Actor 不执行 | 仅可烘焙的程序化外观 |
+| `PreRegisterAllComponents` | 组件注册前的特殊时机 | 仅处理必须早于组件 `OnRegister` 的数据灌入 |
+| `PostInitializeComponents` | 每次入世执行；组件已注册；早于 `BeginPlay` | 对内且幂等的初始化、自身组件配置、自身组件委托绑定、组件间接线 |
+| `BeginPlay` | 每次入世执行；Actor 之间顺序无保证 | Service 注册、外部委托监听、Timer、周期逻辑、解析其他 Actor 引用 |
+| `EndPlay` | 全部消亡和流出路径的统一出口 | 反注册、反监听、清 Timer、取消异步、释放世界资源、回收伴生对象、状态快照 |
+| `Destroyed()` | 仅显式 `Destroy()` 执行 | 不放项目清理逻辑，不保留空覆写 |
+| `BeginDestroy` / `FinishDestroy` | GC 阶段，其他 UObject 可能已经无效 | 仅释放裸内存或操作系统句柄等非 UObject 资源 |
+
+#### 自身组件与外部对象的绑定判据
+
+- 绑定目标是自身组件：放在 `PostInitializeComponents`，使用
+  `AddUniqueDynamic` 等幂等方式；绑定随实例共同存活，通常无需在
+  `EndPlay` 解绑。
+- 绑定目标是 Service、Message Router、其他 Actor 或其他外部对象：必须在
+  `BeginPlay` 监听，在 `EndPlay` 反监听。
+
+`PostInitializeComponents` 会在流送重入时再次执行，禁止对自身组件使用没有
+幂等保护的裸 `AddDynamic`。
+
+### 12.4 生命周期契约
+
+#### 规则 1：注册与反注册成对
+
+凡向 GameInstance 级 Service、Message Router 或其他长寿命对象注册的 Actor：
+
+- `BeginPlay` 注册。
+- `EndPlay` 反注册。
+- 禁止把注销放在 `Destroyed()`、`BeginDestroy()` 或 `FinishDestroy()`。
+
+#### 规则 2：EndPlay 最后调用 Super
+
+`BeginPlay` 先调用 `Super`，再执行项目逻辑；`EndPlay` 先完成项目清理，最后
+调用 `Super`：
+
+```cpp
+void AMCFoo::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 反注册、反监听、清 Timer、取消异步并释放运行期资源。
+
+	Super::EndPlay(EndPlayReason);
+}
+```
+
+#### 规则 3：所有 Actor 一律按可反复入世编写
+
+不根据空间加载设置区分两套生命周期写法。所有 Actor 都必须能够反复执行：
+
+```text
+PostInitializeComponents
+→ BeginPlay
+→ EndPlay
+→ PostInitializeComponents
+→ BeginPlay
+```
+
+每次入世都要做的操作必须幂等；真正只允许一次的操作必须由对象自身标志守门。
+
+#### 规则 4：跨对象注册使用句柄
+
+跨对象注册接口应返回句柄并由 Actor 保存：
+
+- `BeginPlay` 注册前确认旧句柄无效。
+- 注册成功后保存句柄。
+- `EndPlay` 使用句柄注销，然后重置句柄。
+
+同一实例再次 `BeginPlay` 时，如果旧句柄仍然有效，应通过 `ensureMsgf` 在开发
+阶段立即暴露漏注销问题。
+
+#### 规则 5：加载类别在构造函数声明
+
+- 数量少且必须始终存在的常驻 Actor，在构造函数中调用
+  `SetIsSpatiallyLoaded(false)`。
+- Item、门、Trigger、可破坏物等场景对象保持空间加载，接受流出、卸载和重建。
+- 禁止在 `BeginPlay` 等运行期钩子中修改 `SetIsSpatiallyLoaded`。
+
+加载类别属于类级设计决策，不能替代可重入生命周期要求。
+
+#### 规则 6：运行时分支只认 EndPlayReason
+
+需要区分流出和真正死亡时，使用 `EEndPlayReason`：
+
+| Reason | 含义 | 典型处理 |
+| --- | --- | --- |
+| `RemovedFromWorld` | WP Cell 降级、Data Layer 停用或 Streaming Level 隐藏 | 反注册；按需快照运行状态 |
+| `Destroyed` | 显式销毁形成的逻辑死亡 | 反注册；按需清理持久状态 |
+| `LevelTransition`、`Quit`、`EndPlayInEditor` | 当前 World 收场 | 完成统一反注册和临时资源清理 |
+
+禁止根据空间加载设置或其他间接状态猜测 Actor 为什么结束。
+
+#### 规则 7：Service 侧必须防御
+
+- 同实例或同标识重复注册：记录告警并忽略，不产生重复项。
+- 反注册目标不存在：安全返回。
+- 查询目标尚未注册或已经流出：返回空，不使用断言表示业务失败。
+- 开发环境应能检查注册表中的 UObject 是否仍然 `IsValid`，并输出可定位日志。
+
+#### 规则 8：明确边界和豁免
+
+- 池化 Actor 的挂起与恢复不依赖 `BeginPlay`、`EndPlay`，必须使用单独的池化
+  激活桥和记账流程，不与 World Partition 注册账混用。
+- 必须早于 `BeginPlay` 的特殊数据灌入可以使用
+  `PreRegisterAllComponents`，但不得借此提前进行 Service 注册。
+- Possess 和输入绑定归属 `OnPossess`、`OnUnPossess` 及
+  `SetupPlayerInputComponent`，不放入普通 Actor 的 `BeginPlay`。
+- Actor Component 的 `BeginPlay`、`EndPlay` 遵循相同原则；
+  `OnRegister`、`OnUnregister` 同样可能反复触发。
+
+### 12.5 常见操作归属
+
+| 操作 | 生命周期归属 |
+| --- | --- |
+| 创建默认组件、碰撞 Profile 类默认 | 构造函数 |
+| 依赖组件实例的碰撞配置 | `PostInitializeComponents`，必须幂等 |
+| 自身组件 Overlap 等委托 | `PostInitializeComponents` + `AddUniqueDynamic` |
+| Service 注册与反注册 | `BeginPlay` / `EndPlay` |
+| 外部委托监听与反监听 | `BeginPlay` / `EndPlay` |
+| Timer | `BeginPlay` 设置，`EndPlay` 显式清理 |
+| Smart Object 等世界层资源占用 | `EndPlay` 释放 |
+| Streamable Manager、Latent Action 等异步请求 | `EndPlay` 取消 |
+| Actor 创建的伴生 Spawn | `EndPlay` 回收或明确移交所有权 |
+| 流出状态快照 | `EndPlay(RemovedFromWorld)` |
+| Transform 等真正出厂数据 | 作者数据烘焙，或一次性标志保护的缓存 |
+
+### 12.6 BeginPlay 警示清单
+
+代码审查时，`BeginPlay` 出现以下内容必须说明理由，默认视为不能安全重入：
+
+1. `static` 局部变量。
+2. 只设置、不在 `EndPlay` 恢复的一次性 Bool。
+3. `SetTimer` 后没有对应的 `ClearTimer`。
+4. `AddDynamic` 既没有使用幂等绑定，也没有在 `EndPlay` 解绑。
+5. 把 `BeginPlay` 或 `PostInitializeComponents` 时刻的 Transform 直接当作
+   永久出厂值。
+6. Spawn 出寿命可能超过自己的对象，但没有回收或移交所有权。
+7. 向外部对象注册后没有保存可用于注销的句柄。
+
+### 12.7 Actor 流出后的逻辑路线
+
+流出后的 Actor 组件已经反注册，物理、渲染和导航能力均不可用。此时仍然触发
+的 Timer 属于生命周期错误，不是离线运行机制。
+
+需要在 Actor 流出后继续演化的系统，从以下路线中选择：
+
+| 路线 | 实现 | 适用场景 | 代价 |
+| --- | --- | --- | --- |
+| A. 常驻 | 构造函数设置 `SetIsSpatiallyLoaded(false)` | 数量少且必须持续全保真模拟的对象 | 持续占用内存和运行成本 |
+| B. 逻辑上移 | Actor 仅作为表现壳，权威逻辑放入 Service、World Subsystem 或其他常驻数据模型 | 流出后仍需移动、寻路、战斗或持续与世界交互 | 架构成本最高，但能力完整 |
+| C. 惰性结算 | 流出时保存状态和时间戳，流入时按经过时间一次性结算 | 生长、燃烧、刷新等纯时间演化 | 成本最低，适合多数环境对象 |
+
+选型原则：
+
+- 需要持续与世界交互：路线 B。
+- 只需随时间演化：路线 C。
+- 前两者都不适用且对象数量很少：路线 A。
+
+### 12.8 验证与验收
+
+#### 手动验证
+
+1. 在 PIE 中使用 Streaming Source 让测试区域流出后再流入。
+2. 将 Runtime Data Layer 从 `Activated` 切换到 `Loaded`，再切回
+   `Activated`。
+3. 比较各 Service 在流出前、流出后和流入后的注册数量。
+4. 确认同一实例重入时没有重复委托、重复 Timer 或重复注册。
+5. 分别执行显式 `Destroy()`、切关和结束 PIE，确认都能完成清理。
+
+#### 自动化验证
+
+- 将 Cell 或 Data Layer 流出、流入流程纳入自动化测试。
+- 对注册句柄、Service 注册数量和无效对象数量建立断言。
+- 在 Actor 流出后推进时间，确认 Timer 和异步回调不会打到世外对象。
+- 验证 `RemovedFromWorld` 状态快照能够在重新入世时正确恢复。

@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include "Service/MCCharacterService.h"
+#include "Service/MCDataTableService.h"
+#include "Service/MCDebugService.h"
+#include "Service/MCLogService.h"
+#include "Service/MCUIService.h"
 #include "MCGameInstance.generated.h"
-
-class UMCCharacterService;
-class UMCUIService;
 
 UCLASS()
 class MOLDCASTINGBASIC_API UMCGameInstance : public UGameInstance
@@ -15,6 +17,15 @@ class MOLDCASTINGBASIC_API UMCGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Service")
+	TObjectPtr<UMCLogService> LogService = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Service")
+	TObjectPtr<UMCDebugService> DebugService = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Transient, Category = "Service")
+	TObjectPtr<UMCDataTableService> DataTableService = nullptr;
+
 	UPROPERTY(BlueprintReadOnly, Transient, Category = "Service")
 	TObjectPtr<UMCCharacterService> CharacterService = nullptr;
 

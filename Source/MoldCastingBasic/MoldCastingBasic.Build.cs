@@ -22,7 +22,8 @@ public class MoldCastingBasic : ModuleRules
 				"NavigationSystem",
 				"Mover",
 				"MotionWarping",
-				"UMG"
+				"UMG",
+				"AngelscriptCode"
 			}
 		);
 
