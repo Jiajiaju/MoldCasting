@@ -2,31 +2,36 @@
 
 public class MoldCastingBasic : ModuleRules
 {
-    public MoldCastingBasic(ReadOnlyTargetRules Target) : base(Target)
-    {
-        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+	public MoldCastingBasic(ReadOnlyTargetRules Target) : base(Target)
+	{
+		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-        PublicDependencyModuleNames.AddRange(
-            new string[]
-            {
-                "Core",
-                "CoreUObject",
-                "Engine",
-                "AIModule",
-                "EnhancedInput",
-                "GameplayTags",
-                "NavigationSystem",
-                "Mover",
-                "MotionWarping"
-            }
-        );
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"Core",
+				"CoreUObject",
+				"Engine",
+				"AIModule",
+				"CommonInput",
+				"CommonUI",
+				"DeveloperSettings",
+				"EnhancedInput",
+				"GameplayTags",
+				"InputCore",
+				"NavigationSystem",
+				"Mover",
+				"MotionWarping",
+				"UMG"
+			}
+		);
 
-        PrivateDependencyModuleNames.AddRange(
-            new string[]
-            {
-                "Slate",
-                "SlateCore"
-            }
-        );
-    }
+		PrivateDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"Slate",
+				"SlateCore"
+			}
+		);
+	}
 }

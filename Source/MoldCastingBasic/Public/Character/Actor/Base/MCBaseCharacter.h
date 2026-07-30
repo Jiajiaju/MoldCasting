@@ -17,31 +17,26 @@ class MOLDCASTINGBASIC_API AMCBaseCharacter : public APawn
 {
 	GENERATED_BODY()
 
-public:
-	AMCBaseCharacter(const FObjectInitializer& ObjectInitializer);
-
 protected:
 	static const FName MoverComponentName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
-	TObjectPtr<UCapsuleComponent> CapsuleComponent;
+	TObjectPtr<UCapsuleComponent> CapsuleComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
-	TObjectPtr<USkeletalMeshComponent> SkeletalMeshComponent;
+	TObjectPtr<USkeletalMeshComponent> SkeletalMeshComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
-	TObjectPtr<UMCBaseMoverComponent> MoverComponent;
+	TObjectPtr<UMCBaseMoverComponent> MoverComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
-	TObjectPtr<UNavMoverComponent> NavMoverComponent;
+	TObjectPtr<UNavMoverComponent> NavMoverComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Character|Components")
-	TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
-
-	virtual void BeginPlay() override;
+	TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent = nullptr;
 
 public:
-	virtual void Tick(float DeltaTime) override;
+	AMCBaseCharacter(const FObjectInitializer& ObjectInitializer);
 
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 };

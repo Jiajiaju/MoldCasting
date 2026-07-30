@@ -6,9 +6,6 @@
 #include "Camera/PlayerCameraManager.h"
 #include "MCCameraManager.generated.h"
 
-/**
- *
- */
 UCLASS()
 class MOLDCASTINGBASIC_API AMCCameraManager : public APlayerCameraManager
 {

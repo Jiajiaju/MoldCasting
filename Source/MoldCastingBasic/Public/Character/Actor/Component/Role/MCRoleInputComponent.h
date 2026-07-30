@@ -4,11 +4,13 @@
 
 #include "Character/Actor/Component/Role/MCRoleInputTypes.h"
 #include "EnhancedInputComponent.h"
+#include "GameplayTagContainer.h"
 #include "MoverSimulationTypes.h"
 #include "MCRoleInputComponent.generated.h"
 
 class AMCRoleCharacter;
 class UEnhancedInputLocalPlayerSubsystem;
+class UMCGameplayInputRouter;
 class UMCRoleInputConfig;
 class UMCRoleMoverComponent;
 struct FInputActionValue;
@@ -22,7 +24,32 @@ class MOLDCASTINGBASIC_API UMCRoleInputComponent
 {
 	GENERATED_BODY()
 
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<AMCRoleCharacter> RoleCharacter = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMCRoleMoverComponent> RoleMoverComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMCRoleInputConfig> InputConfig = nullptr;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> EnhancedInputSubsystem {};
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UMCGameplayInputRouter> GameplayInputRouter {};
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Role|Input", meta = (AllowPrivateAccess = "true"))
+	FMCRoleInputState InputState {};
+
 public:
+	UPROPERTY(BlueprintAssignable, Category = "Role|Input")
+	FMCRoleInputActionEvent OnTraverseRequested {};
+
+	UPROPERTY(BlueprintAssignable, Category = "Role|Input")
+	FMCRoleInputActionEvent OnInteractRequested {};
+
 	UMCRoleInputComponent(const FObjectInitializer& ObjectInitializer);
 
 	bool InitializeRoleInput(
@@ -30,16 +57,17 @@ public:
 		UMCRoleMoverComponent* InRoleMoverComponent,
 		UMCRoleInputConfig* InInputConfig);
 
+	void ShutdownRoleInput();
+
 	UFUNCTION(BlueprintPure, Category = "Role|Input")
 	const FMCRoleInputState& GetInputState() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Role|Input")
+	void ResetRoleInputState();
+
+	//~ Begin IMoverInputProducerInterface Interface.
 	virtual void ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult) override;
-
-	UPROPERTY(BlueprintAssignable, Category = "Role|Input")
-	FMCRoleInputActionEvent OnTraverseRequested;
-
-	UPROPERTY(BlueprintAssignable, Category = "Role|Input")
-	FMCRoleInputActionEvent OnInteractRequested;
+	//~ End IMoverInputProducerInterface Interface.
 
 protected:
 	virtual void OnUnregister() override;
@@ -50,6 +78,14 @@ private:
 	void RemoveDefaultMappingContext();
 
 	void BindInputActions();
+
+	bool RouteInput(const FGameplayTag& InputTag) const;
+
+	void HandleBlockedInputTagsChanged(const FGameplayTagContainer& BlockedInputTags);
+
+	static bool IsInputTagBlocked(
+		const FGameplayTagContainer& BlockedInputTags,
+		const FGameplayTag& InputTag);
 
 	void OnMoveTriggered(const FInputActionValue& Value);
 
@@ -96,19 +132,4 @@ private:
 	void OnInteractStarted(const FInputActionValue& Value);
 
 	void ApplyLookInput(const FVector2D& LookInput, const FVector2D& LookRate);
-
-	UPROPERTY(Transient)
-	TObjectPtr<AMCRoleCharacter> RoleCharacter;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UMCRoleMoverComponent> RoleMoverComponent;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UMCRoleInputConfig> InputConfig;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> EnhancedInputSubsystem;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Role|Input", meta = (AllowPrivateAccess = "true"))
-	FMCRoleInputState InputState;
 };

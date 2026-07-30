@@ -69,6 +69,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "CommonUI",
+			"Enabled": true
+		},
+		{
 			"Name": "NetworkPrediction",
 			"Enabled": true
 		},

@@ -15,24 +15,20 @@ class MOLDCASTINGBASIC_API AMCRoleCharacter : public AMCBaseCharacter
 {
 	GENERATED_BODY()
 
+protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Input")
+	TObjectPtr<UMCRoleInputConfig> RoleInputConfig = nullptr;
+
 public:
 	AMCRoleCharacter(const FObjectInitializer& ObjectInitializer);
 
-protected:
-	virtual void BeginPlay() override;
-
-public:
-	virtual void Tick(float DeltaTime) override;
-
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
+	virtual void UnPossessed() override;
 
 	UFUNCTION(BlueprintPure, Category = "Character|Input")
 	UMCRoleInputComponent* GetRoleInputComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "Character|Movement")
 	UMCRoleMoverComponent* GetRoleMoverComponent() const;
-
-protected:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Input")
-	TObjectPtr<UMCRoleInputConfig> RoleInputConfig;
 };

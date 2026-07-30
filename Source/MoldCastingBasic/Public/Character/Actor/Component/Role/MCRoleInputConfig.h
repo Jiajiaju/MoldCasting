@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Input/MCInputTypes.h"
 #include "MCRoleInputConfig.generated.h"
 
 class UInputAction;
@@ -16,47 +17,58 @@ class MOLDCASTINGBASIC_API UMCRoleInputConfig : public UDataAsset
 
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input")
-	TObjectPtr<UInputMappingContext> DefaultMappingContext;
+	TObjectPtr<UInputMappingContext> DefaultMappingContext = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input")
-	int32 MappingPriority = 0;
+	int32 MappingPriority = MCInputMappingPriority::Gameplay;
+
+	UPROPERTY(
+		EditDefaultsOnly,
+		BlueprintReadOnly,
+		Category = "Role|Input|Actions",
+		meta = (TitleProperty = "InputTag"))
+	TArray<FMCInputActionDefinition> InputActions {};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> MoveAction;
+	TObjectPtr<UInputAction> MoveAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> MoveWorldSpaceAction;
+	TObjectPtr<UInputAction> MoveWorldSpaceAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> LookAction;
+	TObjectPtr<UInputAction> LookAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> LookGamepadAction;
+	TObjectPtr<UInputAction> LookGamepadAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> JumpAction;
+	TObjectPtr<UInputAction> JumpAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> CrouchAction;
+	TObjectPtr<UInputAction> CrouchAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> SprintAction;
+	TObjectPtr<UInputAction> SprintAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> WalkAction;
+	TObjectPtr<UInputAction> WalkAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> StrafeAction;
+	TObjectPtr<UInputAction> StrafeAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> AimAction;
+	TObjectPtr<UInputAction> AimAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> TraverseAction;
+	TObjectPtr<UInputAction> TraverseAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")
-	TObjectPtr<UInputAction> InteractAction;
+	TObjectPtr<UInputAction> InteractAction = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Look")
 	FVector2D GamepadLookRate = FVector2D(300.0, 165.0);
+
+	const UInputAction* FindInputActionForTag(
+		const FGameplayTag& InputTag,
+		const UInputAction* LegacyInputAction = nullptr) const;
 };

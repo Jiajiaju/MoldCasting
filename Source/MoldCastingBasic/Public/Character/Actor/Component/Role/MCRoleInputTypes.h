@@ -12,10 +12,10 @@ struct MOLDCASTINGBASIC_API FMCRoleInputState
 	GENERATED_BODY()
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Role|Input")
-	FVector2D MoveInput = FVector2D::ZeroVector;
+	FVector2D MoveInput {};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Role|Input")
-	FVector2D LookInput = FVector2D::ZeroVector;
+	FVector2D LookInput {};
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Role|Input")
 	bool bMoveInputIsWorldSpace = false;

@@ -6,9 +6,6 @@
 #include "GameFramework/PlayerController.h"
 #include "MCBasePlayerController.generated.h"
 
-/**
- *
- */
 UCLASS()
 class MOLDCASTINGBASIC_API AMCBasePlayerController : public APlayerController
 {

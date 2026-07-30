@@ -9,24 +9,17 @@
 AMCRoleCharacter::AMCRoleCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMCRoleMoverComponent>(MoverComponentName))
 {
-	PrimaryActorTick.bCanEverTick = true;
-
 	OverrideInputComponentClass = UMCRoleInputComponent::StaticClass();
-}
-
-void AMCRoleCharacter::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
-void AMCRoleCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
 }
 
 void AMCRoleCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (!IsLocallyControlled())
+	{
+		return;
+	}
 
 	UMCRoleInputComponent* RoleInputComponent = Cast<UMCRoleInputComponent>(PlayerInputComponent);
 	UMCRoleMoverComponent* RoleMoverComponent = GetRoleMoverComponent();
@@ -39,6 +32,17 @@ void AMCRoleCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	}
 
 	RoleInputComponent->InitializeRoleInput(this, RoleMoverComponent, RoleInputConfig.Get());
+}
+
+void AMCRoleCharacter::UnPossessed()
+{
+	UMCRoleInputComponent* RoleInputComponent = GetRoleInputComponent();
+	if (IsValid(RoleInputComponent))
+	{
+		RoleInputComponent->ShutdownRoleInput();
+	}
+
+	Super::UnPossessed();
 }
 
 UMCRoleInputComponent* AMCRoleCharacter::GetRoleInputComponent() const

@@ -5,7 +5,7 @@
 class MOLDCASTINGBASIC_API UEMathHelper
 {
 private:
-	UEMathHelper() {}
+	UEMathHelper() { }
 
 public:
 	template<typename ValueType>

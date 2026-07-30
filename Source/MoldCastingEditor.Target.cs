@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 public class MoldCastingEditorTarget : TargetRules
 {
-	public MoldCastingEditorTarget( TargetInfo Target) : base(Target)
+	public MoldCastingEditorTarget(TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V7;
@@ -16,6 +16,6 @@ public class MoldCastingEditorTarget : TargetRules
 
 	private void RegisterModulesCreatedByRider()
 	{
-		ExtraModuleNames.AddRange(new string[] {"MoldCastingBasic", "MoldCastingEditor"});
+		ExtraModuleNames.AddRange(new string[] { "MoldCastingBasic", "MoldCastingEditor" });
 	}
 }

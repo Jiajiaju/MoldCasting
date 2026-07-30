@@ -25,17 +25,25 @@ public:
 template<typename T>
 class UObjectPool
 {
-public:
+private:
+	TArray<T*> AvailableElements {};
+	TArray<T*> TakenElements {};
 
+public:
 	void PreWarm(int32 InCount, UObject* InOuter = nullptr)
 	{
-		static_assert(TIsDerivedFrom<T, UObject>::IsDerived, "UXYObjectPool: T must derive from UObject");
-		static_assert(TIsDerivedFrom<T, IObjectPoolElement>::IsDerived, "UXYObjectPool: T must implement IXYObjectPoolElement");
+		static_assert(TIsDerivedFrom<T, UObject>::IsDerived, "UObjectPool: T must derive from UObject");
+		static_assert(TIsDerivedFrom<T, IObjectPoolElement>::IsDerived, "UObjectPool: T must implement IObjectPoolElement");
 
 		UObject* Outer = IsValid(InOuter) ? InOuter : GetTransientPackage();
 		for (int32 Index = 0; Index < InCount; ++Index)
 		{
 			T* Element = NewObject<T>(Outer);
+			if (!ensure(IsValid(Element)))
+			{
+				continue;
+			}
+
 			IObjectPoolElement* PoolElement = CastChecked<IObjectPoolElement>(Element);
 			PoolElement->OnDefaultInit_ObjectPool();
 			PoolElement->OnReset_ObjectPool();
@@ -46,8 +54,8 @@ public:
 
 	T* Take(UObject* InOuter = nullptr)
 	{
-		static_assert(TIsDerivedFrom<T, UObject>::IsDerived, "UXYObjectPool: T must derive from UObject");
-		static_assert(TIsDerivedFrom<T, IObjectPoolElement>::IsDerived, "UXYObjectPool: T must implement IXYObjectPoolElement");
+		static_assert(TIsDerivedFrom<T, UObject>::IsDerived, "UObjectPool: T must derive from UObject");
+		static_assert(TIsDerivedFrom<T, IObjectPoolElement>::IsDerived, "UObjectPool: T must implement IObjectPoolElement");
 
 		T* Element = nullptr;
 
@@ -59,6 +67,11 @@ public:
 		{
 			UObject* Outer = IsValid(InOuter) ? InOuter : GetTransientPackage();
 			Element = NewObject<T>(Outer);
+			if (!ensure(IsValid(Element)))
+			{
+				return nullptr;
+			}
+
 			IObjectPoolElement* PoolElement = CastChecked<IObjectPoolElement>(Element);
 			PoolElement->OnDefaultInit_ObjectPool();
 		}
@@ -86,9 +99,4 @@ public:
 	int32 GetAvailableCount() const { return AvailableElements.Num(); }
 	int32 GetTakenCount() const { return TakenElements.Num(); }
 	int32 GetTotalCount() const { return AvailableElements.Num() + TakenElements.Num(); }
-
-private:
-
-	TArray<T*> AvailableElements;
-	TArray<T*> TakenElements;
 };

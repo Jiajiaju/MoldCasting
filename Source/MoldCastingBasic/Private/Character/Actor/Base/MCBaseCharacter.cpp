@@ -20,8 +20,6 @@ const FName AMCBaseCharacter::MoverComponentName(TEXT("MoverComponent"));
 AMCBaseCharacter::AMCBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryActorTick.bCanEverTick = true;
-
 	bReplicates = true;
 	SetReplicatingMovement(false);
 
@@ -42,16 +40,6 @@ AMCBaseCharacter::AMCBaseCharacter(const FObjectInitializer& ObjectInitializer)
 
 	NavMoverComponent = CreateDefaultSubobject<UNavMoverComponent>(TEXT("NavMoverComponent"));
 	MotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarpingComponent"));
-}
-
-void AMCBaseCharacter::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
-void AMCBaseCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
 }
 
 void AMCBaseCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

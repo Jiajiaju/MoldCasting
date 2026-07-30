@@ -4,15 +4,16 @@
 
 #include "MoverSimulationTypes.h"
 
-UMCRoleMoverComponent::UMCRoleMoverComponent()
-{
-}
-
 void UMCRoleMoverComponent::SetRoleInputProducer(UObject* NewInputProducer)
 {
-	if (!ensure(IsValid(NewInputProducer))
-		|| !ensure(NewInputProducer->GetClass()->ImplementsInterface(
-			UMoverInputProducerInterface::StaticClass())))
+	if (!ensure(IsValid(NewInputProducer)))
+	{
+		return;
+	}
+
+	const UClass* InputProducerClass = NewInputProducer->GetClass();
+	if (!ensure(IsValid(InputProducerClass))
+		|| !ensure(InputProducerClass->ImplementsInterface(UMoverInputProducerInterface::StaticClass())))
 	{
 		return;
 	}

@@ -126,10 +126,11 @@ UGameInstance
 └─ UMCGameInstance
 ```
 
-- 所属模块：MoldCasting。
+- 所属模块：MoldCastingBasic。
 - 项目级 GameInstance 类型。
 - 已通过 `DefaultEngine.ini` 配置为当前 `GameInstanceClass`。
-- 当前没有额外成员或生命周期实现。
+- 持有 `CharacterService` 和可供 AngelScript 访问的 `UIService`。
+- 在 `Init()` 和 `OnStart()` 中驱动项目 Service 生命周期。
 
 ### UMCBaseService
 
@@ -138,11 +139,37 @@ UGameInstanceSubsystem
 └─ UMCBaseService
 ```
 
-- 所属模块：MoldCasting。
+- 所属模块：MoldCastingBasic。
 - 声明为抽象 `UCLASS`。
 - 提供 `Init()` 虚函数。
 - 提供 `OnStart()` 虚函数。
 - 两个函数当前为空实现。
+
+### UMCUIService
+
+```text
+UGameInstanceSubsystem
+└─ UMCBaseService
+   └─ UMCUIService
+```
+
+- 所属模块：MoldCastingBasic。
+- 使用项目现有 Service 设计，不建立 AngelScript 子类。
+- 创建并管理唯一的 `UMCUIRootWidget`。
+- 提供创建、添加、移除和清理 UI Widget 的稳定 C++ 接口。
+- RootWidget 直接挂到 GameViewport，不依赖 Gameplay Level。
+
+### UMCUIRootWidget
+
+```text
+UCommonUserWidget
+└─ UMCUIRootWidget
+```
+
+- 所属模块：MoldCastingBasic。
+- 是游戏所有 UI 的根容器。
+- 使用 GameInstance 作为 Outer，并由 `UMCUIService` 独占管理。
+- 内部使用原生 Overlay 按 ZOrder 承载业务 Widget。
 
 ### AMCBaseCharacter
 
@@ -187,7 +214,7 @@ AGameMode
 ```ini
 [/Script/EngineSettings.GameMapsSettings]
 GameDefaultMap=/Engine/Maps/Templates/OpenWorld
-GameInstanceClass=/Script/MoldCasting.MCGameInstance
+GameInstanceClass=/Script/MoldCastingBasic.MCGameInstance
 ```
 
 同时包含：

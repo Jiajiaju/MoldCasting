@@ -5,9 +5,12 @@
 #include "Character/Actor/Base/MCRoleCharacter.h"
 #include "Character/Actor/Component/Role/MCRoleInputConfig.h"
 #include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
+#include "Common/MCGameplayTags.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Input/MCGameplayInputRouter.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "MoverDataModelTypes.h"
@@ -34,11 +37,36 @@ bool UMCRoleInputComponent::InitializeRoleInput(
 		return false;
 	}
 
+	APlayerController* PlayerController = Cast<APlayerController>(InRoleCharacter->GetController());
+	if (!ensure(InRoleCharacter->IsLocallyControlled())
+		|| !ensure(IsValid(PlayerController)))
+	{
+		return false;
+	}
+
+	ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	if (!ensure(IsValid(LocalPlayer)))
+	{
+		return false;
+	}
+
+	ShutdownRoleInput();
+
 	RoleCharacter = InRoleCharacter;
 	RoleMoverComponent = InRoleMoverComponent;
 	InputConfig = InInputConfig;
+	GameplayInputRouter = LocalPlayer->GetSubsystem<UMCGameplayInputRouter>();
 
-	ClearActionBindings();
+	if (!ensure(GameplayInputRouter.IsValid()))
+	{
+		ShutdownRoleInput();
+		return false;
+	}
+
+	GameplayInputRouter->OnBlockedInputTagsChanged().AddUObject(
+		this,
+		&UMCRoleInputComponent::HandleBlockedInputTagsChanged);
+
 	BindInputActions();
 	AddDefaultMappingContext();
 
@@ -46,9 +74,43 @@ bool UMCRoleInputComponent::InitializeRoleInput(
 	return true;
 }
 
+void UMCRoleInputComponent::ShutdownRoleInput()
+{
+	RemoveDefaultMappingContext();
+
+	if (GameplayInputRouter.IsValid())
+	{
+		GameplayInputRouter->OnBlockedInputTagsChanged().RemoveAll(this);
+	}
+	GameplayInputRouter.Reset();
+
+	ClearActionBindings();
+	ResetRoleInputState();
+
+	if (IsValid(RoleMoverComponent))
+	{
+		RoleMoverComponent->ClearRoleInputProducer(this);
+	}
+
+	RoleCharacter = nullptr;
+	RoleMoverComponent = nullptr;
+	InputConfig = nullptr;
+}
+
 const FMCRoleInputState& UMCRoleInputComponent::GetInputState() const
 {
 	return InputState;
+}
+
+void UMCRoleInputComponent::ResetRoleInputState()
+{
+	const bool bWasCrouchPressed = InputState.bCrouchPressed;
+	InputState = FMCRoleInputState();
+
+	if (bWasCrouchPressed && IsValid(RoleMoverComponent))
+	{
+		RoleMoverComponent->UnCrouch();
+	}
 }
 
 void UMCRoleInputComponent::ProduceInput_Implementation(
@@ -97,16 +159,7 @@ void UMCRoleInputComponent::ProduceInput_Implementation(
 
 void UMCRoleInputComponent::OnUnregister()
 {
-	RemoveDefaultMappingContext();
-
-	if (IsValid(RoleMoverComponent))
-	{
-		RoleMoverComponent->ClearRoleInputProducer(this);
-	}
-
-	RoleCharacter = nullptr;
-	RoleMoverComponent = nullptr;
-	InputConfig = nullptr;
+	ShutdownRoleInput();
 
 	Super::OnUnregister();
 }
@@ -121,11 +174,19 @@ void UMCRoleInputComponent::AddDefaultMappingContext()
 	}
 
 	APlayerController* PlayerController = Cast<APlayerController>(RoleCharacter->GetController());
-	ULocalPlayer* LocalPlayer = PlayerController ? PlayerController->GetLocalPlayer() : nullptr;
-	UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer
-		? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>()
-		: nullptr;
+	if (!ensure(IsValid(PlayerController)))
+	{
+		return;
+	}
 
+	ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer();
+	if (!ensure(IsValid(LocalPlayer)))
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem =
+		LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>();
 	if (!ensure(IsValid(InputSubsystem)))
 	{
 		return;
@@ -154,167 +215,344 @@ void UMCRoleInputComponent::BindInputActions()
 		return;
 	}
 
-	if (InputConfig->MoveAction)
+	const UInputAction* MoveAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Move,
+		InputConfig->MoveAction);
+	if (IsValid(MoveAction))
 	{
 		BindAction(
-			InputConfig->MoveAction,
+			MoveAction,
 			ETriggerEvent::Triggered,
 			this,
 			&UMCRoleInputComponent::OnMoveTriggered);
 		BindAction(
-			InputConfig->MoveAction,
+			MoveAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnMoveCompleted);
+		BindAction(
+			MoveAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnMoveCompleted);
 	}
 
-	if (InputConfig->MoveWorldSpaceAction)
+	const UInputAction* MoveWorldSpaceAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Move_WorldSpace,
+		InputConfig->MoveWorldSpaceAction);
+	if (IsValid(MoveWorldSpaceAction))
 	{
 		BindAction(
-			InputConfig->MoveWorldSpaceAction,
+			MoveWorldSpaceAction,
 			ETriggerEvent::Triggered,
 			this,
 			&UMCRoleInputComponent::OnMoveWorldSpaceTriggered);
 		BindAction(
-			InputConfig->MoveWorldSpaceAction,
+			MoveWorldSpaceAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnMoveWorldSpaceCompleted);
+		BindAction(
+			MoveWorldSpaceAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnMoveWorldSpaceCompleted);
 	}
 
-	if (InputConfig->LookAction)
+	const UInputAction* LookAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Look_Mouse,
+		InputConfig->LookAction);
+	if (IsValid(LookAction))
 	{
 		BindAction(
-			InputConfig->LookAction,
+			LookAction,
 			ETriggerEvent::Triggered,
 			this,
 			&UMCRoleInputComponent::OnLookTriggered);
 		BindAction(
-			InputConfig->LookAction,
+			LookAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnLookCompleted);
+		BindAction(
+			LookAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnLookCompleted);
 	}
 
-	if (InputConfig->LookGamepadAction)
+	const UInputAction* LookGamepadAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Look_Gamepad,
+		InputConfig->LookGamepadAction);
+	if (IsValid(LookGamepadAction))
 	{
 		BindAction(
-			InputConfig->LookGamepadAction,
+			LookGamepadAction,
 			ETriggerEvent::Triggered,
 			this,
 			&UMCRoleInputComponent::OnLookGamepadTriggered);
 		BindAction(
-			InputConfig->LookGamepadAction,
+			LookGamepadAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnLookGamepadCompleted);
+		BindAction(
+			LookGamepadAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnLookGamepadCompleted);
 	}
 
-	if (InputConfig->JumpAction)
+	const UInputAction* JumpAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Jump,
+		InputConfig->JumpAction);
+	if (IsValid(JumpAction))
 	{
 		BindAction(
-			InputConfig->JumpAction,
+			JumpAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnJumpStarted);
 		BindAction(
-			InputConfig->JumpAction,
+			JumpAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnJumpCompleted);
+		BindAction(
+			JumpAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnJumpCompleted);
 	}
 
-	if (InputConfig->CrouchAction)
+	const UInputAction* CrouchAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Crouch,
+		InputConfig->CrouchAction);
+	if (IsValid(CrouchAction))
 	{
 		BindAction(
-			InputConfig->CrouchAction,
+			CrouchAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnCrouchStarted);
 		BindAction(
-			InputConfig->CrouchAction,
+			CrouchAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnCrouchCompleted);
+		BindAction(
+			CrouchAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnCrouchCompleted);
 	}
 
-	if (InputConfig->SprintAction)
+	const UInputAction* SprintAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Sprint,
+		InputConfig->SprintAction);
+	if (IsValid(SprintAction))
 	{
 		BindAction(
-			InputConfig->SprintAction,
+			SprintAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnSprintStarted);
 		BindAction(
-			InputConfig->SprintAction,
+			SprintAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnSprintCompleted);
+		BindAction(
+			SprintAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnSprintCompleted);
 	}
 
-	if (InputConfig->WalkAction)
+	const UInputAction* WalkAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Walk,
+		InputConfig->WalkAction);
+	if (IsValid(WalkAction))
 	{
 		BindAction(
-			InputConfig->WalkAction,
+			WalkAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnWalkStarted);
 		BindAction(
-			InputConfig->WalkAction,
+			WalkAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnWalkCompleted);
+		BindAction(
+			WalkAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnWalkCompleted);
 	}
 
-	if (InputConfig->StrafeAction)
+	const UInputAction* StrafeAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Strafe,
+		InputConfig->StrafeAction);
+	if (IsValid(StrafeAction))
 	{
 		BindAction(
-			InputConfig->StrafeAction,
+			StrafeAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnStrafeStarted);
 		BindAction(
-			InputConfig->StrafeAction,
+			StrafeAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnStrafeCompleted);
+		BindAction(
+			StrafeAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnStrafeCompleted);
 	}
 
-	if (InputConfig->AimAction)
+	const UInputAction* AimAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Aim,
+		InputConfig->AimAction);
+	if (IsValid(AimAction))
 	{
 		BindAction(
-			InputConfig->AimAction,
+			AimAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnAimStarted);
 		BindAction(
-			InputConfig->AimAction,
+			AimAction,
 			ETriggerEvent::Completed,
+			this,
+			&UMCRoleInputComponent::OnAimCompleted);
+		BindAction(
+			AimAction,
+			ETriggerEvent::Canceled,
 			this,
 			&UMCRoleInputComponent::OnAimCompleted);
 	}
 
-	if (InputConfig->TraverseAction)
+	const UInputAction* TraverseAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Traverse,
+		InputConfig->TraverseAction);
+	if (IsValid(TraverseAction))
 	{
 		BindAction(
-			InputConfig->TraverseAction,
+			TraverseAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnTraverseStarted);
 	}
 
-	if (InputConfig->InteractAction)
+	const UInputAction* InteractAction = InputConfig->FindInputActionForTag(
+		MCGameplayTags::Input_Gameplay_Interact,
+		InputConfig->InteractAction);
+	if (IsValid(InteractAction))
 	{
 		BindAction(
-			InputConfig->InteractAction,
+			InteractAction,
 			ETriggerEvent::Started,
 			this,
 			&UMCRoleInputComponent::OnInteractStarted);
 	}
 }
 
+bool UMCRoleInputComponent::RouteInput(const FGameplayTag& InputTag) const
+{
+	return GameplayInputRouter.IsValid()
+		&& GameplayInputRouter->RouteInput(InputTag);
+}
+
+void UMCRoleInputComponent::HandleBlockedInputTagsChanged(
+	const FGameplayTagContainer& BlockedInputTags)
+{
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Move)
+		|| IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Move_WorldSpace))
+	{
+		InputState.MoveInput = FVector2D::ZeroVector;
+		InputState.bMoveInputIsWorldSpace = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Look)
+		|| IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Look_Mouse)
+		|| IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Look_Gamepad))
+	{
+		InputState.LookInput = FVector2D::ZeroVector;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Jump))
+	{
+		InputState.bJumpPressed = false;
+		InputState.bJumpJustPressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Crouch))
+	{
+		const bool bWasCrouchPressed = InputState.bCrouchPressed;
+		InputState.bCrouchPressed = false;
+
+		if (bWasCrouchPressed && IsValid(RoleMoverComponent))
+		{
+			RoleMoverComponent->UnCrouch();
+		}
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Sprint))
+	{
+		InputState.bSprintPressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Walk))
+	{
+		InputState.bWalkPressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Strafe))
+	{
+		InputState.bStrafePressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Aim))
+	{
+		InputState.bAimPressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Traverse))
+	{
+		InputState.bTraverseJustPressed = false;
+	}
+
+	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Interact))
+	{
+		InputState.bInteractJustPressed = false;
+	}
+}
+
+bool UMCRoleInputComponent::IsInputTagBlocked(
+	const FGameplayTagContainer& BlockedInputTags,
+	const FGameplayTag& InputTag)
+{
+	for (const FGameplayTag& BlockedInputTag : BlockedInputTags)
+	{
+		if (InputTag.MatchesTag(BlockedInputTag))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void UMCRoleInputComponent::OnMoveTriggered(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Move))
+	{
+		return;
+	}
+
 	InputState.MoveInput = Value.Get<FVector2D>();
 	InputState.bMoveInputIsWorldSpace = false;
 }
@@ -329,6 +567,11 @@ void UMCRoleInputComponent::OnMoveCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnMoveWorldSpaceTriggered(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Move_WorldSpace))
+	{
+		return;
+	}
+
 	InputState.MoveInput = Value.Get<FVector2D>();
 	InputState.bMoveInputIsWorldSpace = true;
 }
@@ -343,6 +586,11 @@ void UMCRoleInputComponent::OnMoveWorldSpaceCompleted(const FInputActionValue& V
 
 void UMCRoleInputComponent::OnLookTriggered(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Look_Mouse))
+	{
+		return;
+	}
+
 	InputState.LookInput = Value.Get<FVector2D>();
 	ApplyLookInput(InputState.LookInput, FVector2D::UnitVector);
 }
@@ -354,11 +602,17 @@ void UMCRoleInputComponent::OnLookCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnLookGamepadTriggered(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Look_Gamepad))
+	{
+		return;
+	}
+
 	InputState.LookInput = Value.Get<FVector2D>();
 
 	if (IsValid(InputConfig))
 	{
-		const float DeltaSeconds = GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.0f;
+		const UWorld* World = GetWorld();
+		const float DeltaSeconds = IsValid(World) ? World->GetDeltaSeconds() : 0.0f;
 		ApplyLookInput(InputState.LookInput, InputConfig->GamepadLookRate * DeltaSeconds);
 	}
 }
@@ -370,6 +624,11 @@ void UMCRoleInputComponent::OnLookGamepadCompleted(const FInputActionValue& Valu
 
 void UMCRoleInputComponent::OnJumpStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Jump))
+	{
+		return;
+	}
+
 	InputState.bJumpJustPressed = !InputState.bJumpPressed;
 	InputState.bJumpPressed = true;
 }
@@ -382,6 +641,11 @@ void UMCRoleInputComponent::OnJumpCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnCrouchStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Crouch))
+	{
+		return;
+	}
+
 	InputState.bCrouchPressed = true;
 
 	if (IsValid(RoleMoverComponent))
@@ -402,6 +666,11 @@ void UMCRoleInputComponent::OnCrouchCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnSprintStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Sprint))
+	{
+		return;
+	}
+
 	InputState.bSprintPressed = true;
 }
 
@@ -412,6 +681,11 @@ void UMCRoleInputComponent::OnSprintCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnWalkStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Walk))
+	{
+		return;
+	}
+
 	InputState.bWalkPressed = true;
 }
 
@@ -422,6 +696,11 @@ void UMCRoleInputComponent::OnWalkCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnStrafeStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Strafe))
+	{
+		return;
+	}
+
 	InputState.bStrafePressed = true;
 }
 
@@ -432,6 +711,11 @@ void UMCRoleInputComponent::OnStrafeCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnAimStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Aim))
+	{
+		return;
+	}
+
 	InputState.bAimPressed = true;
 }
 
@@ -442,12 +726,22 @@ void UMCRoleInputComponent::OnAimCompleted(const FInputActionValue& Value)
 
 void UMCRoleInputComponent::OnTraverseStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Traverse))
+	{
+		return;
+	}
+
 	InputState.bTraverseJustPressed = true;
 	OnTraverseRequested.Broadcast();
 }
 
 void UMCRoleInputComponent::OnInteractStarted(const FInputActionValue& Value)
 {
+	if (!RouteInput(MCGameplayTags::Input_Gameplay_Interact))
+	{
+		return;
+	}
+
 	InputState.bInteractJustPressed = true;
 	OnInteractRequested.Broadcast();
 }

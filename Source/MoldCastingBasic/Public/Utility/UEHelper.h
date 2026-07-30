@@ -5,7 +5,7 @@
 class MOLDCASTINGBASIC_API UEHelper
 {
 private:
-	UEHelper() {}
+	UEHelper() { }
 
 public:
 	template<typename IInterfaceType, typename UInterfaceType>
@@ -14,14 +14,21 @@ public:
 		// static_assert(TIsDerivedFrom<UInterfaceType, UInterface>::Value);
 
 		if (!IsValid(UEObject)) return nullptr;
-		if (!UEObject->GetClass()->ImplementsInterface(UInterfaceType::StaticClass())) return nullptr;
+
+		const UClass* ObjectClass = UEObject->GetClass();
+		if (!IsValid(ObjectClass)) return nullptr;
+		if (!ObjectClass->ImplementsInterface(UInterfaceType::StaticClass())) return nullptr;
+
 		return Cast<IInterfaceType>(UEObject);
 	}
 
 	template<typename EnumType>
 	static FString EnumToString(EnumType EnumValue)
 	{
-		return StaticEnum<EnumType>()->GetNameStringByValue(static_cast<uint8>(EnumValue));
+		const UEnum* Enum = StaticEnum<EnumType>();
+		if (!IsValid(Enum)) return FString();
+
+		return Enum->GetNameStringByValue(static_cast<uint8>(EnumValue));
 	}
 
 	template<typename ActorClass>

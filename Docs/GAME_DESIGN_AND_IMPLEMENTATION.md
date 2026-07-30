@@ -439,7 +439,7 @@ UI 可以根据当前界面状态决定同一个输入是否被消费：
 
 ### 9.4 C++ 基础层
 
-计划提供以下基础类型：
+第一阶段已提供以下基础类型：
 
 - `UMCGameViewportClient`：继承 `UCommonGameViewportClient`，确保 CommonUI Action Router 在 Gameplay Input 之前处理物理输入。
 - `UMCInputPolicySubsystem`：基于 `ULocalPlayerSubsystem`，管理当前玩家的活动输入策略、策略优先级和阻止的 Gameplay InputTag。
@@ -592,39 +592,89 @@ Mapping Context 优先级使用统一的具名常量，不允许各 Widget 自�
 - Gameplay、UI 和 System Mapping Context 分别使用 `0`、`1000` 和 `2000` 的固定优先级。
 - 所有 Gameplay Input 必须先通过统一路由，不允许 Input Action 直接执行最终玩法行为。
 
+### 9.10 实现状态
+
+第一阶段 C++ 输入基础框架已完成，并通过 Unreal Engine 5.8 `MoldCastingEditor Win64 Development` 编译：
+
+- 已启用 CommonUI，并将 `UMCGameViewportClient` 配置为项目 Game Viewport Client。
+- 已提供 `UMCInputSettings`、`UMCInputPolicySubsystem`、`UMCGameplayInputRouter`、策略定义和策略句柄。
+- 已提供 Gameplay、Input Policy 和基础 UI Action Native GameplayTag。
+- `UMCRoleInputComponent` 已接入 Gameplay Input Router，并在策略变化、失去控制权和组件注销时清理持续输入。
+- `UMCRoleInputConfig` 已支持 `InputAction + InputTag` 数据映射；现有固定 Action 字段暂时保留为兼容回退，避免破坏已有角色输入资源。
+- 已统一 Gameplay、UI 和 System Mapping Context 的具名优先级常量。
+
+尚未完成的后续工作：
+
+- Common Activatable Widget 项目基类及其 `InputPolicyTag` 自动申请/释放。
+- 具体 UI Action、UI Mapping Context 和页面级条件消费配置。
+- Input Policy 的自动化测试，以及实际 UI 页面中的 PIE 输入顺序与残留按键验收。
+
 ## 10. UI
 
 ### 10.1 目标
 
-建立基于 CommonUI 的统一界面框架，支持键鼠、手柄及不同玩法状态下的一致界面体验。
+建立基于 CommonUI 的统一界面框架。UI 的生命周期归属于 GameInstance 和
+GameViewport，不依赖任何 Gameplay Level，并允许 AngelScript 通过稳定的
+C++ 接口实现易变的业务逻辑。
 
 ### 10.2 职责边界
 
-- 负责界面层级、激活栈、输入路由、焦点、导航和输入设备相关的显示切换。
-- 负责 HUD、菜单、提示、对话界面和其他视觉信息的组织与展示。
-- 读取 Character、Combat、World、Narrative 和 Item 提供的状态，并向相关系统发出用户请求。
-- 不直接持有或实现移动、战斗、世界、剧情和环境物品的业务规则。
+- UI 框架不引用 Character、Combat、World、Narrative、Item 或具体 Level 类型。
+- Gameplay 不负责创建、持有或销毁 RootWidget。
+- 稳定的对象生命周期和容器管理由 C++ 实现；易变的页面业务由 AngelScript
+  通过 `UMCGameInstance::UIService` 调用。
+- 第一阶段不设计页面 Tag、Layer、页面栈或具体业务页面。
 
 ### 10.3 C++ 基础层
 
-待填写。
+- `UMCUIService`：继承项目已有的 `UMCBaseService`，由 `UMCGameInstance`
+  获取并调用 `Init()`、`OnStart()`。
+- `UMCUIRootWidget`：继承 `UCommonUserWidget`，是游戏所有 UI 的唯一根容器。
+- `UMCUIService` 是 RootWidget 的唯一创建者和生命周期管理者。
+- RootWidget 使用 GameInstance 作为 Outer，并通过
+  `UGameViewportClient::AddViewportWidgetContent` 直接挂载到 GameViewport。
+- `UMCUIService` 提供 `CreateAndAddWidget`、`AddWidget`、`RemoveWidget`、
+  `ClearWidgets` 和 `GetRootWidget` 等稳定接口。
+- `UMCUIRootWidget` 使用原生全屏 Overlay 承载子 Widget，并按 ZOrder 排序。
 
-### 10.4 AngelScript/Blueprint 扩展层
+### 10.4 AngelScript 扩展层
 
-待填写。
+- `UMCUIService` 和 `UMCUIRootWidget` 不设计 AngelScript 子类。
+- AngelScript 通过 `UMCGameInstance::GetInstance()` 获取 GameInstance，再访问
+  `UIService`。
+- AngelScript 只负责具体页面的打开、关闭、交互和其他易变业务逻辑。
+- AngelScript 不负责 Service、RootWidget、GameViewport 或跨地图生命周期。
 
 ### 10.5 数据与配置
 
-待填写。
+- 第一阶段不引入 UI Tag、页面注册表或 Layer 配置。
+- 具体页面通过 `TSubclassOf<UUserWidget>` 传给 `CreateAndAddWidget`。
+- `ZOrder` 只用于最基础的显示顺序；统一 Layer 规划留到后续阶段。
 
 ### 10.6 网络与生命周期
 
-待填写。
+- UIService 是 `UGameInstanceSubsystem`，随 GameInstance 创建和销毁。
+- RootWidget 由 GameInstance 持有，不使用 World、Level、GameMode 或
+  PlayerController 作为 Outer。
+- UIService 监听 GameViewport 创建和地图加载事件；Viewport 暂时不可用时保留
+  RootWidget，Viewport 可用后再挂载。
+- RootWidget 直接挂到 GameViewport，不注册为随 World 清理的普通 Viewport
+  Widget，因此地图切换期间保持同一实例。
+- 当前按单本地玩家设计；多人分屏属于后续扩展。
 
 ### 10.7 测试与验收
 
-待填写。
+- `UMCUIService::ValidateRootWidget` 验证 RootWidget、GameInstance Outer 和
+  GameViewport 挂载状态。
+- `UMCUIService::BeginLevelIndependenceTest` 记录 RootWidget，切换到引擎入口地图
+  `/Engine/Maps/Entry`，地图加载后验证 RootWidget 仍为同一实例。
+- 开发环境可通过控制台命令 `MC.UI.TestLevelIndependence` 执行完整测试。
+- 测试成功日志为 `UI_LEVEL_INDEPENDENCE_TEST_PASSED`。
+- 该测试不依赖项目 Gameplay Level；UE 显示任何 UI 的最低前提仍是
+  GameViewport 已创建。
 
 ### 10.8 待确认事项
 
-待填写。
+- 页面 Layer、页面栈和模态规则。
+- 页面标识及 UI Tag 体系。
+- 具体页面与此前 Input Policy 的自动接入方式。

@@ -27,19 +27,140 @@
 - 默认使用 `main` 分支。除非用户明确要求，否则不得强制推送或改写共享历史。
 - 用户要求提交修改时，提交成功后立即推送到当前跟踪的远程分支；仅当用户明确要求不推送时例外。
 
-## C++ 规范
+## 代码风格
+
+写代码前先参考工程中现有文件的风格、格式、命名习惯，保持一致。
+
+### Unreal C++ 基础
 
 - 遵循 Unreal Engine 命名和反射规范，按适用情况使用 `A`、`U`、`F`、`E`、`I` 和 `T` 前缀。
 - 需要 Unreal 反射、序列化、复制或蓝图公开时，使用 `UCLASS`、`USTRUCT`、`UENUM`、`UFUNCTION` 和 `UPROPERTY`。
-- 尽量精简公共头文件，并优先使用前向声明。
-- 仅在确有需要时向 `MoldCasting.Build.cs` 添加模块依赖。
-- 遵循现有 Unreal 风格：使用 Tab 缩进、大括号独占一行、标识符使用 `PascalCase`。
-- 用含义明确的具名常量代替 Magic Number。
+- 仅在确有需要时向对应的 `Build.cs` 添加模块依赖。
+- 使用 Tab 缩进，标识符使用 `PascalCase`。
+- 如果事件、定时器、子系统或委托更合适，应避免在 `Tick` 中执行逐帧工作。
+
+### 判空
+
+C++ 使用 `IsValid`，避免 `!= nullptr`。任何指针类型的变量，使用之前必须判空。AS 中引用类变量使用前必须判空。
+
+### 成员变量初始化
+
+值类型给默认值，F 类型用 `{}`，指针类用 `nullptr`：
+
+```cpp
+float FloatValue = 0.0f;
+FVector Vector {};
+AActor* Actor = nullptr;
+TObjectPtr<AActor> TActor = nullptr;
+```
+
+### 函数签名
+
+参数全部一行，或每行一个参数。不允许中途换行：
+
+```cpp
+// 好：全部一行
+void Func(AActor* A, AActor* B, float C);
+
+// 好：每参数一行
+void Func(
+	AActor* A,
+	AActor* B,
+	float C
+);
+
+// 不好：中途换行
+void Func(AActor* A, AActor* B,
+	float C);
+```
+
+### for 循环变量
+
+不用 `i`、`j`、`k`，使用 `Index` 或 `XXXIndex`。自增使用前置 `++Index`。
+
+### 代码块
+
+- `if` 块只有一行时可与 `if` 同行且不用 `{}`，其余一律使用 `{}`。
+- 没有 `{}` 的 `if` 不允许换行，语句必须与 `if` 同行：
+
+```cpp
+// 好
+if (Condition) return;
+
+// 不好
+if (Condition)
+	return;
+```
+
+- `switch` 的 `case` 块使用 `{}` 包裹。
+- `for`、`while` 一律使用 `{}`。
+
+### Lambda
+
+显式捕获，禁用 `[&]`、`[=]`：
+
+```cpp
+[this, SomeVar]() { }
+```
+
+### .h 行内实现
+
+仅允许真正一行的 getter/setter，`{ }` 前后有空格：
+
+```cpp
+int32 GetValue() const { return Value; }
+```
+
+### 前向声明
+
+`.h` 对 class/struct 使用前向声明，include 放在 `.cpp`。
+
+### 枚举
+
+一律使用 `enum class`，基类为 `uint8`。善用 `None` 分类。
+
+### 宏注释
+
+`#if`、`#else`、`#endif` 后标注条件：
+
+```cpp
+#if WITH_EDITOR
+// ...
+#endif // WITH_EDITOR
+```
+
+### Debug 命令
+
+给出的 UE 控制台 Debug 命令必须有出处，优先从以下来源获取：
+
+- UE 源码中的 Cvar/Command 定义，搜索 `FAutoConsoleCommand`、`TAutoConsoleVariable`。
+- `Engine/Config/BaseEngine.ini` 等配置文件中的 ConsoleVariables 注册。
+- `BaseInput.ini` 中的 `ExecCommands`。
+
+不允许凭经验或推测编造不存在的 Debug 命令。不确定的命令先搜索源码确认。
+
+### 类成员顺序
+
+成员变量声明在成员函数之前。
+
+### 接口实现
+
+类实现某个接口时，在 `.h` 中使用注释包裹接口方法：
+
+```cpp
+//~ Begin IXYObjectPoolElement Interface.
+virtual void OnBeforeTake() override;
+virtual void OnAfterTake() override;
+//~ End IXYObjectPoolElement Interface.
+```
+
+### 其他
+
+- 使用含义明确的具名常量代替 Magic Number。
 - 有意识地使用空行表达代码结构。
 - 空行必须完全为空，不得包含空格、Tab 或其他空白字符。
 - Function Library 类命名为 `UXxxxFunctionLibrary`；AngelScript 绑定会自动移除 `U` 前缀和 `FunctionLibrary` 后缀。
 - 不得用 `Comp` 缩写 `Component`，必须完整书写 `Component`。
-- 如果事件、定时器、子系统或委托更合适，应避免在 `Tick` 中执行逐帧工作。
 
 ## 配置与资源
 

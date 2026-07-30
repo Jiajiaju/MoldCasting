@@ -10,9 +10,11 @@
 
 项目目前处于基础工程与技术验证阶段：
 
-- 主运行模块：`MoldCasting`
+- 运行时模块：`MoldCasting`、`MoldCastingBasic`
 - 目标平台：Windows、DX12、Shader Model 6
 - 渲染特性：Lumen、硬件光线追踪、Substrate
+- 输入基础层：Enhanced Input、CommonUI、GameplayTag 输入策略和角色输入路由
+- UI 基础层：GameInstance UIService、跨 Level 常驻 RootWidget
 - 现有内容主要来自角色、动画、移动与 MetaHuman 示例资源
 - C++ 层目前只有基础模块，尚未实现铸造业务系统
 
@@ -26,6 +28,9 @@
 
 打开项目前，需要在本机准备兼容的 Unreal Engine 5.8 构建，并将 `.uproject`
 关联到该引擎。
+
+项目显式启用 CommonUI，并通过 `UMCGameViewportClient` 保证 UI 输入先于
+Gameplay Input 路由。该 Viewport 配置位于 `Config/DefaultEngine.ini`。
 
 ## 打开项目
 
