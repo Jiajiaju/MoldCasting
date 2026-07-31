@@ -1,6 +1,7 @@
 #include "UI/Widget/Base/MCUIRootWidget.h"
 
 #include "Blueprint/UserWidget.h"
+#include "CommonActivatableWidget.h"
 #include "Components/PanelWidget.h"
 #include "Widgets/SOverlay.h"
 
@@ -33,6 +34,12 @@ bool UMCUIRootWidget::RemoveWidget(UUserWidget* Widget)
 		return false;
 	}
 
+	if (UCommonActivatableWidget* ActivatableWidget =
+		Cast<UCommonActivatableWidget>(Widget))
+	{
+		ActivatableWidget->DeactivateWidget();
+	}
+
 	if (RootOverlay.IsValid())
 	{
 		if (const TSharedPtr<SWidget>* SlateWidget = WidgetSlateContents.Find(Widget))
@@ -52,6 +59,15 @@ bool UMCUIRootWidget::RemoveWidget(UUserWidget* Widget)
 
 void UMCUIRootWidget::ClearWidgets()
 {
+	for (UUserWidget* Widget : ManagedWidgets)
+	{
+		if (UCommonActivatableWidget* ActivatableWidget =
+			Cast<UCommonActivatableWidget>(Widget))
+		{
+			ActivatableWidget->DeactivateWidget();
+		}
+	}
+
 	if (RootOverlay.IsValid())
 	{
 		RootOverlay->ClearChildren();
@@ -107,4 +123,10 @@ void UMCUIRootWidget::AddWidgetToSlate(UUserWidget* Widget, int32 ZOrder)
 		SlateWidget
 	];
 	WidgetSlateContents.Add(Widget, SlateWidget);
+
+	if (UCommonActivatableWidget* ActivatableWidget =
+		Cast<UCommonActivatableWidget>(Widget))
+	{
+		ActivatableWidget->ActivateWidget();
+	}
 }
