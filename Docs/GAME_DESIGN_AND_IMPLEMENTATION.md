@@ -827,6 +827,165 @@ PrintInScreen
 - 验证 `PrintInScreen` 在可用 Viewport 中同时产生屏幕信息和日志副本。
 - 验证无有效 `GEngine` 时不会访问无效对象，且日志输出仍然有效。
 
+### 11.8 控制台调试命令体系
+
+控制台调试命令用于向开发者提供可发现、可补全、可查询帮助的项目调试入口，
+同时支持 C++ 原生命令和 AngelScript 热重载命令。命令入口只负责参数接收、
+对象校验和服务转调，具体业务逻辑仍由归属服务实现。
+
+#### 11.8.1 命名与目录
+
+- 项目命令统一使用 `mc.<Domain>.<Command>` 点分命名，例如
+  `mc.Combat.KillAll`。
+- 输入 `mc.` 可枚举全部项目命令，输入 `mc.Combat.` 可枚举对应业务域命令，
+  `help mc.Combat.KillAll` 可查询帮助文本。
+- `mc.Use.*` 保留给临时或一次性验证命令，不作为稳定接口。
+- 禁止建立单一入口加手工参数分发器；每条命令独立注册，避免失去补全、帮助
+  和按域检索能力。
+- 所有 C++ 调试命令入口放在
+  `Source/MoldCastingBasic/Private/Debug/Command/`，一个业务域一个
+  `MC<Domain>DebugCommands.cpp`。
+- C++ 脚本命令契约放在
+  `Source/MoldCastingBasic/Public/Debug/Command/`，对应实现放在
+  `Source/MoldCastingBasic/Private/Debug/Command/`。
+- AngelScript 调试命令放在 `Script/Debug/Command/`。
+
+#### 11.8.2 C++ 原生命令
+
+C++ 命令使用 `FAutoConsoleCommandWithWorld` 或
+`FAutoConsoleCommandWithWorldAndArgs` 作为文件作用域对象逐条注册。对象在模块
+加载时向 `IConsoleManager` 注册，模块卸载时自动注销，不进入 UHT，也不维护
+中心注册表。
+
+```cpp
+namespace
+{
+	void ExecuteFoo(const TArray<FString>& Arguments, UWorld* InWorld)
+	{
+		if (!IsValid(InWorld)) return;
+
+		// 取得归属服务并转调业务接口。
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs FooCommand(
+		TEXT("mc.Foo.Bar"),
+		TEXT("Do bar. Usage: mc.Foo.Bar <name>"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&ExecuteFoo));
+}
+```
+
+命令入口必须保持轻量：校验 World，取得 GameInstance 或 Subsystem，再调用归属
+服务。需要复用、测试或接入 UI 的逻辑不得直接写在命令入口中。
+
+#### 11.8.3 AngelScript 命令契约
+
+AngelScript 无法依赖 C++ 的模块加载自注册机制，并且脚本热重载后旧脚本对象
+可能失效。因此注册句柄由 C++ `UMCDebugService` 持有，脚本只声明命令数据和
+执行体。
+
+`UMCScriptDebugCommand` 是脚本命令的无状态契约：
+
+```cpp
+UCLASS(Abstract, Blueprintable)
+class MOLDCASTINGBASIC_API UMCScriptDebugCommand : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Debug Command")
+	FString CommandName {};
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Debug Command")
+	FString Help {};
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Debug Command")
+	void Execute(const TArray<FString>& Arguments, UWorld* InWorld);
+	virtual void Execute_Implementation(
+		const TArray<FString>& Arguments,
+		UWorld* InWorld);
+};
+```
+
+`UMCDebugService::RefreshScriptConsoleCommands()` 执行以下流程：
+
+1. 注销服务上一轮持有的全部 `IConsoleCommand*` 并清空句柄。
+2. 通过 `GetDerivedClasses()` 扫描 `UMCScriptDebugCommand` 的全部派生类。
+3. 跳过 `Abstract`、`Deprecated`、`NewerVersionExists` 和空命令名类。
+4. 通过 `IConsoleManager::FindConsoleObject()` 检查重名；若与原生命令或其他
+   脚本命令重名，则记录警告并跳过，避免覆盖命令或保存悬空句柄。
+5. 注册 `FConsoleCommandWithWorldAndArgsDelegate`，委托只捕获
+   `TWeakObjectPtr<UClass>`。
+6. 执行命令时重新取得当前类的 CDO，校验 World、类和 CDO 后调用
+   `Execute()`。
+
+委托不捕获脚本实例，脚本热重载时最坏情况是弱类指针短暂失效并静默返回，
+不会继续调用已经失效的脚本对象。命令在 CDO 上执行，因此脚本命令必须保持
+无状态；持久状态应放入归属服务。
+
+AngelScript 命令示例：
+
+```angelscript
+UCLASS()
+class UMCASDebugFooCommand : UMCScriptDebugCommand
+{
+	default CommandName = "mc.Debug.Foo";
+	default Help = "Do foo.";
+
+	UFUNCTION(BlueprintOverride)
+	void Execute(const TArray<FString>& Arguments, UWorld InWorld)
+	{
+		// 参数不得命名为 World，避免遮蔽 GetWorld。
+	}
+}
+```
+
+#### 11.8.4 生命周期与热重载
+
+| 时机 | 行为 |
+| --- | --- |
+| 每次 PIE 或游戏会话开始 | `UMCDebugService::OnStart()` 调用 `RefreshScriptConsoleCommands()` |
+| 会话中 AngelScript 热重载 | 执行 `mc.Debug.RefreshScriptCommands` 重新扫描和注册 |
+| `UMCDebugService::Deinitialize()` | 注销服务持有的全部脚本命令句柄 |
+
+重刷操作始终先注销再全量扫描，允许在任意时机重复调用。手动重刷命令本身是
+C++ 原生命令，实现在
+`Source/MoldCastingBasic/Private/Debug/Command/MCDebugCommands.cpp`，不依赖
+AngelScript 生命周期。
+
+#### 11.8.5 当前命令与扩展规则
+
+| 命令 | 路线 | 说明 |
+| --- | --- | --- |
+| `mc.Debug.RefreshScriptCommands` | C++ | AngelScript 热重载后重新扫描并注册全部脚本命令 |
+| `mc.Debug.Ping` | AngelScript | 输出 `mc.Debug.Ping: Pong`，验证脚本命令管线 |
+
+新增 C++ 命令时，在对应业务域的 `MC<Domain>DebugCommands.cpp` 中注册独立
+命令，并将业务逻辑转调给归属服务。
+
+新增 AngelScript 命令时：
+
+1. 在 `Script/Debug/Command/` 新建带 `UCLASS()` 的
+   `UMCScriptDebugCommand` 子类。
+2. 通过 `default CommandName` 和 `default Help` 声明命令信息。
+3. 通过 `UFUNCTION(BlueprintOverride)` 覆写 `Execute()`。
+4. 热重载后执行 `mc.Debug.RefreshScriptCommands`。
+5. 在本节当前命令表中补充命令名和用途。
+
+`MCASDebugPingCommand.as` 作为管线自检和新脚本命令模板保留。
+
+#### 11.8.6 验证记录
+
+2026-07-31 完成首次落地验证：
+
+- `MoldCastingEditor Win64 Development` 的 UHT、编译和链接通过。
+- `AngelscriptTest` commandlet 返回 `0`，报告 `0 error`。
+- 无渲染游戏会话执行 `mc.Debug.Ping`，成功输出
+  `mc.Debug.Ping: Pong`，确认 GameInstance 启动、反射扫描、命令注册和 CDO
+  执行链路有效。
+- 该游戏会话仍报告来自既有 `Content/Widgets` 资源和实验性 Toolset Python
+  启动脚本的无关错误，因此不能视为完整 PIE 零错误验收；本功能相关链路未
+  报告错误。
+
 ## 12. Actor 生命周期与 World Partition
 
 > 状态：已拍板（2026-07-27）；2026-07-29 修订

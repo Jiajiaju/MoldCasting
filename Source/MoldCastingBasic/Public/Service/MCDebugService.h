@@ -6,6 +6,8 @@
 #include "MCBaseService.h"
 #include "MCDebugService.generated.h"
 
+struct IConsoleCommand;
+
 /**
  *
  */
@@ -13,4 +15,16 @@ UCLASS()
 class MOLDCASTINGBASIC_API UMCDebugService : public UMCBaseService
 {
 	GENERATED_BODY()
+
+private:
+	TArray<IConsoleCommand*> ScriptConsoleCommands {};
+
+public:
+	virtual void OnStart() override;
+	virtual void Deinitialize() override;
+
+	void RefreshScriptConsoleCommands();
+
+private:
+	void UnregisterScriptConsoleCommands();
 };
