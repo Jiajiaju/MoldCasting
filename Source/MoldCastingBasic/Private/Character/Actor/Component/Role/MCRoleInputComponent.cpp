@@ -3,9 +3,9 @@
 #include "Character/Actor/Component/Role/MCRoleInputComponent.h"
 
 #include "Character/Actor/Base/MCRoleCharacter.h"
-#include "Character/Actor/Component/Role/MCRoleInputConfig.h"
 #include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
 #include "Common/MCGameplayTags.h"
+#include "DataAsset/Character/MCDataAsset_Input.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -14,6 +14,7 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "MoverDataModelTypes.h"
+#include "Struct/Input/MCRoleMoverInputs.h"
 
 namespace MCRoleInput
 {
@@ -28,7 +29,7 @@ UMCRoleInputComponent::UMCRoleInputComponent(const FObjectInitializer& ObjectIni
 bool UMCRoleInputComponent::InitializeRoleInput(
 	AMCRoleCharacter* InRoleCharacter,
 	UMCRoleMoverComponent* InRoleMoverComponent,
-	UMCRoleInputConfig* InInputConfig)
+	UMCDataAsset_Input* InInputConfig)
 {
 	if (!ensure(IsValid(InRoleCharacter))
 		|| !ensure(IsValid(InRoleMoverComponent))

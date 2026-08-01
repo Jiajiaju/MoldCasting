@@ -5,13 +5,13 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Input/MCInputTypes.h"
-#include "MCRoleInputConfig.generated.h"
+#include "MCDataAsset_Input.generated.h"
 
 class UInputAction;
 class UInputMappingContext;
 
 UCLASS(BlueprintType)
-class MOLDCASTINGBASIC_API UMCRoleInputConfig : public UDataAsset
+class MOLDCASTINGBASIC_API UMCDataAsset_Input : public UDataAsset
 {
 	GENERATED_BODY()
 
@@ -22,11 +22,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input")
 	int32 MappingPriority = MCInputMappingPriority::Gameplay;
 
-	UPROPERTY(
-		EditDefaultsOnly,
-		BlueprintReadOnly,
-		Category = "Role|Input|Actions",
-		meta = (TitleProperty = "InputTag"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions", meta = (TitleProperty = "InputTag"))
 	TArray<FMCInputActionDefinition> InputActions {};
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Role|Input|Actions")

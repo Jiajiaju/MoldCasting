@@ -1,8 +1,8 @@
-#include "Character/Actor/Component/Role/MCRoleInputConfig.h"
+#include "DataAsset/Character/MCDataAsset_Input.h"
 
 #include "InputAction.h"
 
-const UInputAction* UMCRoleInputConfig::FindInputActionForTag(
+const UInputAction* UMCDataAsset_Input::FindInputActionForTag(
 	const FGameplayTag& InputTag,
 	const UInputAction* LegacyInputAction) const
 {

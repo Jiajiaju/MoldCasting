@@ -6,8 +6,8 @@
 #include "MCBaseCharacter.h"
 #include "MCRoleCharacter.generated.h"
 
+class UMCDataAsset_Input;
 class UMCRoleInputComponent;
-class UMCRoleInputConfig;
 class UMCRoleMoverComponent;
 
 UCLASS()
@@ -17,7 +17,7 @@ class MOLDCASTINGBASIC_API AMCRoleCharacter : public AMCBaseCharacter
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|Input")
-	TObjectPtr<UMCRoleInputConfig> RoleInputConfig = nullptr;
+	TObjectPtr<UMCDataAsset_Input> RoleInputConfig = nullptr;
 
 public:
 	AMCRoleCharacter(const FObjectInitializer& ObjectInitializer);

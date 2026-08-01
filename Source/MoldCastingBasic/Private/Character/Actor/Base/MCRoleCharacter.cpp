@@ -3,8 +3,8 @@
 #include "Character/Actor/Base/MCRoleCharacter.h"
 
 #include "Character/Actor/Component/Role/MCRoleInputComponent.h"
-#include "Character/Actor/Component/Role/MCRoleInputConfig.h"
 #include "Character/Actor/Component/Role/MCRoleMoverComponent.h"
+#include "DataAsset/Character/MCDataAsset_Input.h"
 
 AMCRoleCharacter::AMCRoleCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UMCRoleMoverComponent>(MoverComponentName))

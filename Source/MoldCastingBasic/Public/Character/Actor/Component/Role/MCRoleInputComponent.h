@@ -2,16 +2,16 @@
 
 #pragma once
 
-#include "Character/Actor/Component/Role/MCRoleInputTypes.h"
 #include "EnhancedInputComponent.h"
 #include "GameplayTagContainer.h"
 #include "MoverSimulationTypes.h"
+#include "Struct/Input/MCRoleInputState.h"
 #include "MCRoleInputComponent.generated.h"
 
 class AMCRoleCharacter;
 class UEnhancedInputLocalPlayerSubsystem;
+class UMCDataAsset_Input;
 class UMCGameplayInputRouter;
-class UMCRoleInputConfig;
 class UMCRoleMoverComponent;
 struct FInputActionValue;
 
@@ -32,7 +32,7 @@ private:
 	TObjectPtr<UMCRoleMoverComponent> RoleMoverComponent = nullptr;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UMCRoleInputConfig> InputConfig = nullptr;
+	TObjectPtr<UMCDataAsset_Input> InputConfig = nullptr;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> EnhancedInputSubsystem {};
@@ -55,7 +55,7 @@ public:
 	bool InitializeRoleInput(
 		AMCRoleCharacter* InRoleCharacter,
 		UMCRoleMoverComponent* InRoleMoverComponent,
-		UMCRoleInputConfig* InInputConfig);
+		UMCDataAsset_Input* InInputConfig);
 
 	void ShutdownRoleInput();
 
