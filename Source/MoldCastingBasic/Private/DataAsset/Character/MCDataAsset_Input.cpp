@@ -4,7 +4,8 @@
 
 const UInputAction* UMCDataAsset_Input::FindInputActionForTag(
 	const FGameplayTag& InputTag,
-	const UInputAction* LegacyInputAction) const
+	const UInputAction* LegacyInputAction
+) const
 {
 	const FMCInputActionDefinition* InputActionDefinition = InputActions.FindByPredicate(
 		[InputTag](const FMCInputActionDefinition& Definition)

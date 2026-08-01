@@ -63,7 +63,8 @@ bool FMCRoleMoverInputs::ShouldReconcile(const FMoverDataStructBase& AuthoritySt
 void FMCRoleMoverInputs::Interpolate(
 	const FMoverDataStructBase& From,
 	const FMoverDataStructBase& To,
-	float Pct)
+	float Pct
+)
 {
 	const FMCRoleMoverInputs& FromInputs = static_cast<const FMCRoleMoverInputs&>(From);
 	const FMCRoleMoverInputs& ToInputs = static_cast<const FMCRoleMoverInputs&>(To);

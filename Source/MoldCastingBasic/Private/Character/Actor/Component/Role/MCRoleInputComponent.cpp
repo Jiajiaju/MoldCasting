@@ -29,7 +29,8 @@ UMCRoleInputComponent::UMCRoleInputComponent(const FObjectInitializer& ObjectIni
 bool UMCRoleInputComponent::InitializeRoleInput(
 	AMCRoleCharacter* InRoleCharacter,
 	UMCRoleMoverComponent* InRoleMoverComponent,
-	UMCDataAsset_Input* InInputConfig)
+	UMCDataAsset_Input* InInputConfig
+)
 {
 	if (!ensure(IsValid(InRoleCharacter))
 		|| !ensure(IsValid(InRoleMoverComponent))
@@ -116,7 +117,8 @@ void UMCRoleInputComponent::ResetRoleInputState()
 
 void UMCRoleInputComponent::ProduceInput_Implementation(
 	int32 SimTimeMs,
-	FMoverInputCmdContext& InputCmdResult)
+	FMoverInputCmdContext& InputCmdResult
+)
 {
 	FCharacterDefaultInputs& CharacterInputs =
 		InputCmdResult.InputCollection.FindOrAddMutableDataByType<FCharacterDefaultInputs>();
@@ -468,7 +470,8 @@ bool UMCRoleInputComponent::RouteInput(const FGameplayTag& InputTag) const
 }
 
 void UMCRoleInputComponent::HandleBlockedInputTagsChanged(
-	const FGameplayTagContainer& BlockedInputTags)
+	const FGameplayTagContainer& BlockedInputTags
+)
 {
 	if (IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Move)
 		|| IsInputTagBlocked(BlockedInputTags, MCGameplayTags::Input_Gameplay_Move_WorldSpace))
@@ -534,7 +537,8 @@ void UMCRoleInputComponent::HandleBlockedInputTagsChanged(
 
 bool UMCRoleInputComponent::IsInputTagBlocked(
 	const FGameplayTagContainer& BlockedInputTags,
-	const FGameplayTag& InputTag)
+	const FGameplayTag& InputTag
+)
 {
 	for (const FGameplayTag& BlockedInputTag : BlockedInputTags)
 	{

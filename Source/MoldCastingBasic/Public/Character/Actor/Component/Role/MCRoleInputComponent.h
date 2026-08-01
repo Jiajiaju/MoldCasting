@@ -55,7 +55,8 @@ public:
 	bool InitializeRoleInput(
 		AMCRoleCharacter* InRoleCharacter,
 		UMCRoleMoverComponent* InRoleMoverComponent,
-		UMCDataAsset_Input* InInputConfig);
+		UMCDataAsset_Input* InInputConfig
+	);
 
 	void ShutdownRoleInput();
 
@@ -85,7 +86,8 @@ private:
 
 	static bool IsInputTagBlocked(
 		const FGameplayTagContainer& BlockedInputTags,
-		const FGameplayTag& InputTag);
+		const FGameplayTag& InputTag
+	);
 
 	void OnMoveTriggered(const FInputActionValue& Value);
 

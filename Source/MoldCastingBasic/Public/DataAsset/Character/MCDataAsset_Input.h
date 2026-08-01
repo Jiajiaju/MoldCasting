@@ -66,5 +66,6 @@ public:
 
 	const UInputAction* FindInputActionForTag(
 		const FGameplayTag& InputTag,
-		const UInputAction* LegacyInputAction = nullptr) const;
+		const UInputAction* LegacyInputAction = nullptr
+	) const;
 };
